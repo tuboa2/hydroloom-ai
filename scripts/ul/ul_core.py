@@ -1,0 +1,166 @@
+# ul core library
+from __future__ import annotations
+from dataclasses import dataclass
+from typing import Literal
+import logging
+import numpy as np
+import pandas as pd
+from numpy.random import Generator
+
+__all__ = [
+    "SimulationConfig",
+    "GlobalInitializer",
+    "EnvironmentalSimulator",
+]
+
+# 1. global initialization
+@dataclass(frozen=True)
+class SimulationConfig:
+    # Immutable configuration parameters for the entire simulation.
+    simulation_days: int = 365
+    population_size: int = 1000
+    random_seed: int = 2026
+
+    def __post_init__(self) -> None:
+        if self.simulation_days <= 0:
+            raise ValueError(
+                f"simulation_days must be > 0. Received: {self.simulation_days}"
+            )
+        if self.population_size <= 0:
+            raise ValueError(
+                f"population_size must be > 0. Received: {self.population_size}"
+            )
+        if self.random_seed < 0:
+            raise ValueError(
+                f"random_seed must be a positive number. Received: {self.random_seed}"
+            )
+
+
+class GlobalInitializer:
+    def __init__(self, config: SimulationConfig) -> None:
+        self._config = config
+        self._logger = logging.getLogger(__name__)
+        self._rng: Generator = self._initialize_rng()
+        self._temporal_index: np.ndarray = self._initialize_temporal_horizon()
+
+        self._logger.info("Global Environment Initialization Complete.")
+        self._logger.info(
+            "Parameters -> Days: %d | Population: %d | Seed: %d",
+            self._config.simulation_days,
+            self._config.population_size,
+            self._config.random_seed,
+        )
+
+    # private helper methods
+    def _initialize_rng(self) -> Generator:
+        self._logger.debug(
+            "Initializing NumPy Generator with seed: %d",
+            self._config.random_seed,
+        )
+        return np.random.default_rng(seed=self._config.random_seed)
+
+    def _initialize_temporal_horizon(self) -> np.ndarray:
+        self._logger.debug(
+            "Generating Temporal Index Array of Length %d",
+            self._config.simulation_days,
+        )
+        return np.arange(self._config.simulation_days, dtype=np.int32)
+
+    # public attributes/properties
+    @property
+    def config(self) -> SimulationConfig:
+        return self._config
+
+    @property
+    def rng(self) -> Generator:
+        return self._rng
+
+    @property
+    def temporal_index(self) -> np.ndarray:
+        return self._temporal_index
+
+    @property
+    def population_size(self) -> int:
+        return self._config.population_size
+
+# environmental time series simulator (temperature)
+class EnvironmentalSimulator:
+    # generates time series max daily temperature
+    def __init__(self, temporal_index: np.ndarray, rng: Generator) -> None:
+        self._temporal_index = temporal_index
+        self._simulation_days: int = len(temporal_index)
+        self._rng = rng
+        self._logger = logging.getLogger(__name__)
+        self._logger.info(
+            "Environmental Simulator Initialized. Days: %d",
+            self._simulation_days,
+        )
+
+    # private helper methods
+    def _generate_ou_noise(
+        self,
+        theta: float = 0.15,
+        sigma: float = 1.8,
+        noise_bounds: tuple[float, float] = (5.0, 10.0),
+    ) -> np.ndarray:
+        # Ornstein-Uhlenbeck noise
+        mid_point = (noise_bounds[0] + noise_bounds[1]) / 2.0
+        noise = np.full(self._simulation_days, mid_point)
+
+        for t in range(1, self._simulation_days):
+            drift = -theta * (noise[t - 1] - mid_point)
+            shock = sigma * self._rng.standard_normal()
+            noise[t] = noise[t - 1] + drift + shock
+
+        return np.clip(noise, a_min=noise_bounds[0], a_max=noise_bounds[1])
+
+    # public methods
+    def generate_daily_max_temp(
+        self, hemisphere: Literal["north", "south"]
+    ) -> pd.DataFrame:
+        # 1. Hemispheric parameters
+        if hemisphere == "north":
+            annual_mean = 15.2
+            amplitude = 7.15
+            phase_shift = 30
+            bounds = (7.0, 26.0)
+            noise_bounds = (5.0, 10.0)
+            self._logger.info("Generating Northern Hemisphere Temperature Data...")
+        elif hemisphere == "south":
+            annual_mean = 13.3
+            amplitude = 3.65
+            phase_shift = 40
+            bounds = (9.0, 20.0)
+            noise_bounds = (2.0, 6.0)
+            self._logger.info("Generating Southern Hemisphere Temperature Data...")
+        else:
+            raise ValueError("Hemisphere must be strictly 'north' or 'south'.")
+
+        # base seasonal curve
+        angular_curve = (2 * np.pi / 365) * (
+            self._temporal_index - phase_shift
+        )
+        if hemisphere == "north":
+            base_curve = annual_mean + amplitude * np.sin(angular_curve)
+        else:
+            base_curve = annual_mean - amplitude * np.sin(angular_curve)
+
+        # OU Distribution for Noise
+        weather_noise = self._generate_ou_noise(
+            theta=0.15, sigma=1.8, noise_bounds=noise_bounds
+        )
+
+        # 4. Superimpose and enforce physical boundary controls
+        raw_temp = base_curve + weather_noise
+        final_temp = np.clip(raw_temp, a_min=bounds[0], a_max=bounds[1])
+
+        # 5. Package into a structured DataFrame
+        return pd.DataFrame(
+            {
+                "day_index": self._temporal_index,
+                "base_seasonal_temp_celsius": np.round(base_curve, 2),
+                "ou_volatility_noise": np.round(weather_noise, 2),
+                "daily_max_temp_celsius": np.round(final_temp, 2),
+            }
+        )
+    
