@@ -33,7 +33,13 @@ def main() -> None:
         len(df_north),
         len(df_south),
     )
+    logger.info(df_north)
+    logger.info(df_south)
     logger.info("Environmental Simulation Complete.\n")
+
+    # export dataframe
+    df_north.to_csv("../../data/north_temp.csv", index=False)
+    df_south.to_csv("../../data/south_temp.csv", index=False)
 
     # done
     logger.info("UL Data Gen Execution Successfully Finished")

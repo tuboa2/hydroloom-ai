@@ -99,8 +99,8 @@ class EnvironmentalSimulator:
     # private helper methods
     def _generate_ou_noise(
         self,
-        theta: float = 0.15,
-        sigma: float = 1.8,
+        theta: float = 0.25,
+        sigma: float = 1.2,
         noise_bounds: tuple[float, float] = (5.0, 10.0),
     ) -> np.ndarray:
         # Ornstein-Uhlenbeck noise
@@ -123,15 +123,15 @@ class EnvironmentalSimulator:
             annual_mean = 15.2
             amplitude = 7.15
             phase_shift = 30
-            bounds = (7.0, 26.0)
-            noise_bounds = (5.0, 10.0)
+            bounds = (7.0, 35)
+            noise_bounds = (-5.0, 5.0)
             self._logger.info("Generating Northern Hemisphere Temperature Data...")
         elif hemisphere == "south":
             annual_mean = 13.3
             amplitude = 3.65
             phase_shift = 40
-            bounds = (9.0, 20.0)
-            noise_bounds = (2.0, 6.0)
+            bounds = (9.0, 25)
+            noise_bounds = (-2.0, 2.0)
             self._logger.info("Generating Southern Hemisphere Temperature Data...")
         else:
             raise ValueError("Hemisphere must be strictly 'north' or 'south'.")
@@ -140,19 +140,14 @@ class EnvironmentalSimulator:
         angular_curve = (2 * np.pi / 365) * (
             self._temporal_index - phase_shift
         )
-        if hemisphere == "north":
-            base_curve = annual_mean + amplitude * np.sin(angular_curve)
-        else:
-            base_curve = annual_mean - amplitude * np.sin(angular_curve)
 
+        base_curve = annual_mean - amplitude * np.sin(angular_curve)
+        
         # OU Distribution for Noise
-        weather_noise = self._generate_ou_noise(
-            theta=0.15, sigma=1.8, noise_bounds=noise_bounds
-        )
-
-        # 4. Superimpose and enforce physical boundary controls
-        raw_temp = base_curve + weather_noise
-        final_temp = np.clip(raw_temp, a_min=bounds[0], a_max=bounds[1])
+        if hemisphere == "north":
+            weather_noise = self._generate_ou_noise(theta=0.25, sigma=0.88, noise_bounds=noise_bounds)
+        elif hemisphere == "south":
+            weather_noise = self._generate_ou_noise(theta=0.25, sigma=0.71, noise_bounds=noise_bounds)
 
         # 5. Package into a structured DataFrame
         return pd.DataFrame(
@@ -160,7 +155,7 @@ class EnvironmentalSimulator:
                 "day_index": self._temporal_index,
                 "base_seasonal_temp_celsius": np.round(base_curve, 2),
                 "ou_volatility_noise": np.round(weather_noise, 2),
-                "daily_max_temp_celsius": np.round(final_temp, 2),
+                "daily_max_temp_celsius": np.round(base_curve + weather_noise, 2).clip(bounds[0], bounds[1]),
             }
         )
     

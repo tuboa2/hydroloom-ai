@@ -13,12 +13,12 @@ logger = logging.getLogger(__name__)
 _HEMISPHERE_BOUNDS: dict[str, dict] = {
     "north": {
         "lower": 7.0,
-        "upper": 26.0,
+        "upper": 35,
         "label": "Northern Hemisphere",
     },
     "south": {
         "lower": 9.0,
-        "upper": 20.0,
+        "upper": 25,
         "label": "Southern Hemisphere",
     },
 }
@@ -97,7 +97,7 @@ if __name__ == "__main__":
     mock_config = SimulationConfig(
         simulation_days=365,
         population_size=1000,
-        random_seed=2026,
+        random_seed=None,
     )
     mock_global = GlobalInitializer(config=mock_config)
 
