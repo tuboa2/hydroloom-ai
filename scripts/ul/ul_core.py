@@ -159,3 +159,55 @@ class EnvironmentalSimulator:
             }
         )
     
+    # generate daily rainfall
+    def generate_daily_rainfall_mm(
+        self,
+        daily_temp: np.ndarray,
+        *,
+        hemisphere: str,
+        gamma_shape: float = 0.2984420954,
+        gamma_scale: float = 28.4812368282,
+        wet_floor: float = 0.1,
+        cap: float = 75.0
+    ) -> pd.DataFrame:
+        # cast temp input to float32
+        temp_f32 = daily_temp.astype(np.float32)
+
+        # 1. sigmoid probability
+        if (hemisphere == 'north'):
+            k: np.float32 = 0.20
+            t0: np.float32 = 11.35
+        else:
+            k = 0.39
+            t0: np.float32 = 11.33
+        
+        exponent = k * (temp_f32 - t0)
+        prob_rain = np.float32(1.0) / (np.float32(1.0) + np.exp(exponent))
+
+        # 2. bernoulli wet/dry mask
+        uniform = self._rng.uniform(0.0, 1.0, size=self._simulation_days).astype(np.float32)
+        wet_mask = (uniform < prob_rain).astype(np.uint8)
+
+        # 3. gamma volume
+        raw_volume = self._rng.gamma(
+            shape=gamma_shape,
+            scale=gamma_scale,
+            size=self._simulation_days
+        ).astype(np.float32)
+
+        # 4. floor + cap
+        np.maximum(raw_volume, np.float32(wet_floor), out=raw_volume)
+        np.minimum(raw_volume, np.float32(cap), out=raw_volume)
+
+        # 5. mask * volume
+        daily_rainfall_mm = (wet_mask.astype(np.float32) * raw_volume)
+
+        # package
+        return pd.DataFrame(
+            {
+                "day_index": self._temporal_index,
+                "rain_probability": np.round(prob_rain, 4),
+                "wet_dry_state": wet_mask,
+                "daily_rainfall_mm": np.round(daily_rainfall_mm, 2)
+            }
+        )
