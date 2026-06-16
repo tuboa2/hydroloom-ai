@@ -11,6 +11,7 @@ __all__ = [
     "SimulationConfig",
     "GlobalInitializer",
     "EnvironmentalSimulator",
+    "HouseholdDemographicSimulator",
 ]
 
 # 1. global initialization
@@ -34,7 +35,6 @@ class SimulationConfig:
             raise ValueError(
                 f"random_seed must be a positive number. Received: {self.random_seed}"
             )
-
 
 class GlobalInitializer:
     def __init__(self, config: SimulationConfig) -> None:
@@ -211,3 +211,61 @@ class EnvironmentalSimulator:
                 "daily_rainfall_mm": np.round(daily_rainfall_mm, 2)
             }
         )
+
+@dataclass(frozen=True)
+class OccupancyParams:
+    # hemispheric parameters for occupancy_count generation
+    r: float
+    mu: float
+    label: str
+    cap: int = 8
+
+    @property
+    def p(self) -> np.float64:
+        return self.r / (self.r + self.mu)
+    
+OCCUPANCY_PARAMS: dict[str, OccupancyParams] = {
+    "north": OccupancyParams(r=3, mu=2.44, cap=8, label="North Hemisphere"),
+    "south": OccupancyParams(r=5.72, mu=2.85, cap=8, label="South Hemisphere")
+}
+
+class HouseholdDemographicSimulator:
+    # generates occupancy_count arrays via Negative Binomial
+    def __init__(self, rng: Generator) -> None:
+        self._rng = rng
+        self._logger = logging.getLogger(__name__)
+
+    def generate_occupancy_count(
+        self,
+        population_size: int,
+        hemisphere: Literal["north", "south"],    
+    ) -> np.ndarray:
+        params = OCCUPANCY_PARAMS[hemisphere]
+        self._logger.info(
+            "Generating Occupancy Count for %sern Hemisphere.\nParams: n=%.2f | r=%.2f | | μ'=%.2f | p=%.5f",
+            hemisphere, population_size, params.r, params.mu, params.p
+        )
+
+        # 1. vectorized negative binomial draw (failures before r successes)
+        rate = self._rng.gamma(
+            shape=params.r,
+            scale=(1.0 - params.p) / params.p,
+            size=population_size
+        )
+        raw_draws = self._rng.poisson(lam=rate)
+
+        # 2. Shift +1
+        occupancy = raw_draws + 1
+
+        # 3. cap at structural limit
+        np.minimum(occupancy, params.cap, out=occupancy)
+
+        # 4. downcast to int8
+        result = occupancy.astype(np.int8)
+
+        self._logger.info(
+            "Occupancy Count Stats | mean=%.3f | std=%.3f | min=%d | max=%d",
+            result.mean(), result.std(), result.min(), result.max(),
+        )
+
+        return result

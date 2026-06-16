@@ -4,6 +4,7 @@ from pathlib import Path
 import logging
 import global_init as global_init # global initialization 
 import environmental_simulator as environmental_simulator # temp generator
+import household_demographic_simulator as household_demographic_simulator
 
 # logging config
 logging.basicConfig(
@@ -47,11 +48,24 @@ def main() -> None:
     )
     logger.info("Environmental Simulation Complete.\n")
 
+    # 3. generate occupancy count
+    logger.info("Running Household Demographic Simulation...")
+    df_occupancy_count_north = household_demographic_simulator.run(global_config=global_config, population_size=global_config.population_size, hemisphere="north")
+    df_occupancy_count_south = household_demographic_simulator.run(global_config=global_config, population_size=global_config.population_size, hemisphere="south")
+    logger.info(
+        "Generated %d rows for North Occupancy Counts, %d rows for South Occupancy Counts",
+        len(df_occupancy_count_north),
+        len(df_occupancy_count_south),
+    )
+    logger.info("House Demographic Simulation Complete.\n")
+
     # export dataframe
     df_north_temp.to_csv(data_dir / "north_temp.csv", index=False)
     df_south_temp.to_csv(data_dir / "south_temp.csv", index=False)
     df_north_rainfall.to_csv(data_dir / "north_rainfall.csv", index=False)
     df_south_rainfall.to_csv(data_dir / "south_rainfall.csv", index=False)
+    df_occupancy_count_north.to_csv(data_dir / "north_occupancy.csv", index=False)
+    df_occupancy_count_south.to_csv(data_dir / "south_occupancy.csv", index=False)
 
     # done
     logger.info("UL Data Gen Execution Successfully Finished")
