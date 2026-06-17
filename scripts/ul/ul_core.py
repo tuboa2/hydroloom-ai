@@ -223,10 +223,37 @@ class OccupancyParams:
     @property
     def p(self) -> np.float64:
         return self.r / (self.r + self.mu)
+
+@dataclass(frozen=True)
+class ApplianceEfficiencyParams:
+    # immutable beta distribution parameters for appliance_efficiency_score
+    alpha: float
+    beta: float
+    label: str
+    lower_bound: float = 0.15
+    upper_bound: float = 0.95
+
+    @property
+    def theoretical_mean(self) -> np.float64:
+        return self.alpha / (self.alpha + self.beta)
+
+    @property
+    def theoretical_mode(self) -> np.float64:
+        # only valid when alpha > 1 and beta > 1
+        return (self.alpha - 1.0) / (self.alpha + self.beta - 2.0)
     
 OCCUPANCY_PARAMS: dict[str, OccupancyParams] = {
     "north": OccupancyParams(r=3, mu=2.44, cap=8, label="North Hemisphere"),
     "south": OccupancyParams(r=5.72, mu=2.85, cap=8, label="South Hemisphere")
+}
+
+APPLIANCE_EFFICIENCY_PARAMS: dict[str, ApplianceEfficiencyParams] = {
+    "north": ApplianceEfficiencyParams(
+        alpha=9.36, beta=3.64, label="North Hemisphere"
+    ),
+    "south": ApplianceEfficiencyParams(
+        alpha=4.2, beta=4.55, label="South Hemisphere"
+    )
 }
 
 class HouseholdDemographicSimulator:
@@ -266,6 +293,39 @@ class HouseholdDemographicSimulator:
         self._logger.info(
             "Occupancy Count Stats | mean=%.3f | std=%.3f | min=%d | max=%d",
             result.mean(), result.std(), result.min(), result.max(),
+        )
+
+        return result
+
+    # generate hemispheric appliance efficiency score
+    def generate_appliance_efficiency_score(
+        self,
+        population_size: int,
+        hemisphere: Literal["north", "south"]
+    ) -> np.ndarray:
+        params = APPLIANCE_EFFICIENCY_PARAMS[hemisphere]
+        self._logger.info(
+            "Generating Appliance Efficiency Score for $s.'n"
+            "Params: α=%.2f | β=%.2f | bounds=[%.2f, %.2f] | E[X]=%.4f | Mode=%.4f",
+            params.label, params.alpha, params.beta, params.lower_bound, params.upper_bound, params.theoretical_mean, params.theoretical_mode
+        )
+
+        # 1. vectorized beta draw
+        raw_scores = self._rng.beta(
+            a=params.alpha,
+            b=params.beta,
+            size=population_size
+        )
+
+        # 2. domain clamp
+        np.clip(raw_scores, params.lower_bound, params.upper_bound, out=raw_scores)
+
+        # 3. downcast float64 -> float32
+        result = raw_scores.astype(np.float32)
+
+        self._logger.info(
+            "Appliance Efficiency Stats | mean=%.4f | std=%.4f | min=%.4f | max=%.4f",
+            result.mean(), result.std(), result.min(), result.max()
         )
 
         return result

@@ -48,14 +48,19 @@ def main() -> None:
     )
     logger.info("Environmental Simulation Complete.\n")
 
-    # 3. generate occupancy count
+    # 3. generate occupancy count and appliance efficiency score
     logger.info("Running Household Demographic Simulation...")
-    df_occupancy_count_north = household_demographic_simulator.run(global_config=global_config, population_size=global_config.population_size, hemisphere="north")
-    df_occupancy_count_south = household_demographic_simulator.run(global_config=global_config, population_size=global_config.population_size, hemisphere="south")
+    df_occupancy_count_north, df_appliance_efficiency_north = household_demographic_simulator.run(global_config=global_config, population_size=global_config.population_size, hemisphere="north")
+    df_occupancy_count_south, df_appliance_efficiency_south = household_demographic_simulator.run(global_config=global_config, population_size=global_config.population_size, hemisphere="south")
     logger.info(
-        "Generated %d rows for North Occupancy Counts, %d rows for South Occupancy Counts",
+        "Generated %d rows for North Occupancy Counts, %d rows for South Occupancy Counts\n",
         len(df_occupancy_count_north),
         len(df_occupancy_count_south),
+    )
+    logger.info(
+        "Generated %d rows for North Appliance Efficiency Score, %d rows for South Appliance Efficiency Score",
+        len(df_appliance_efficiency_north),
+        len(df_appliance_efficiency_south),
     )
     logger.info("House Demographic Simulation Complete.\n")
 
@@ -66,6 +71,8 @@ def main() -> None:
     df_south_rainfall.to_csv(data_dir / "south_rainfall.csv", index=False)
     df_occupancy_count_north.to_csv(data_dir / "north_occupancy.csv", index=False)
     df_occupancy_count_south.to_csv(data_dir / "south_occupancy.csv", index=False)
+    df_appliance_efficiency_north.to_csv(data_dir / "north_appliance_efficiency.csv", index=False)
+    df_appliance_efficiency_south.to_csv(data_dir / "south_appliance_efficiency.csv", index=False)
 
     # done
     logger.info("UL Data Gen Execution Successfully Finished")
