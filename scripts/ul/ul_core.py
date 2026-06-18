@@ -12,6 +12,9 @@ __all__ = [
     "GlobalInitializer",
     "EnvironmentalSimulator",
     "HouseholdDemographicSimulator",
+    "OCCUPANCY_PARAMS",
+    "APPLIANCE_EFFICIENCY_PARAMS",
+    "LANDSCAPE_TYPE_PARAMS",
 ]
 
 # 1. global initialization
@@ -241,7 +244,38 @@ class ApplianceEfficiencyParams:
     def theoretical_mode(self) -> np.float64:
         # only valid when alpha > 1 and beta > 1
         return (self.alpha - 1.0) / (self.alpha + self.beta - 2.0)
+
+@dataclass(frozen=True)
+class LandscapeTypeParams:
+    # immutable parameters for landscape type categorical sampling
+    categories: tuple[str, ...]
+    weights: tuple[str, ...]
+    label: str
+
+    def __post_init__(self) -> None:
+        if len(self.categories) != len(self.weights):
+            raise ValueError(
+                f"Categories ({len(self.categories)}) and weights "
+                f"({len(self.weights)}) must have an equal length."
+            )
+        w_sum = sum(self.weights)
+        if abs(w_sum - 1.0) > 1e-9:
+            raise ValueError(
+                f"Weights must sum to 1.0, got {w_sum:.12f}"
+            )
+        if any(w < 0.0 for w in self.weights):
+            raise ValueError("All weights must be non-negative.")
+        
+    @property
+    def weight_array(self) -> np.ndarray:
+        # returns weights as float64 ndarray
+        return np.array(self.weights, dtype=np.float64)
     
+    @property
+    def fallback_category(self) -> str:
+        # modal category used as FP fallback
+        return self.categories[self.weights.index(max(self.weights))]
+
 OCCUPANCY_PARAMS: dict[str, OccupancyParams] = {
     "north": OccupancyParams(r=3, mu=2.44, cap=8, label="North Hemisphere"),
     "south": OccupancyParams(r=5.72, mu=2.85, cap=8, label="South Hemisphere")
@@ -254,6 +288,32 @@ APPLIANCE_EFFICIENCY_PARAMS: dict[str, ApplianceEfficiencyParams] = {
     "south": ApplianceEfficiencyParams(
         alpha=4.2, beta=4.55, label="South Hemisphere"
     )
+}
+
+# hemisphereic constants
+LANDSCAPE_TYPE_PARAMS: dict[str, LandscapeTypeParams] = {
+    "north": LandscapeTypeParams(
+        categories=(
+            "turfgrass_dominant",
+            "hardscape_dominant",
+            "container_balcony",
+            "xeriscape_native",
+            "food_homegarden",
+        ),
+        weights=(0.40, 0.25, 0.15, 0.12, 0.08),
+        label="North Hemisphere"
+    ),
+    "south": LandscapeTypeParams(
+        categories=(
+            "turfgrass_dominant",
+            "hardscape_dominant",
+            "container_balcony",
+            "xeriscape_native",
+            "food_homegarden",
+        ),
+        weights=(0.25, 0.30, 0.05, 0.20, 0.20),
+        label="South Hemisphere",
+    ),
 }
 
 class HouseholdDemographicSimulator:
@@ -305,7 +365,7 @@ class HouseholdDemographicSimulator:
     ) -> np.ndarray:
         params = APPLIANCE_EFFICIENCY_PARAMS[hemisphere]
         self._logger.info(
-            "Generating Appliance Efficiency Score for $s.'n"
+            "Generating Appliance Efficiency Score for %s.\n"
             "Params: α=%.2f | β=%.2f | bounds=[%.2f, %.2f] | E[X]=%.4f | Mode=%.4f",
             params.label, params.alpha, params.beta, params.lower_bound, params.upper_bound, params.theoretical_mean, params.theoretical_mode
         )
@@ -326,6 +386,48 @@ class HouseholdDemographicSimulator:
         self._logger.info(
             "Appliance Efficiency Stats | mean=%.4f | std=%.4f | min=%.4f | max=%.4f",
             result.mean(), result.std(), result.min(), result.max()
+        )
+
+        return result
+    
+    # generate hemispheric landscape type
+    def generate_landscape_type(
+        self,
+        population_size: int,
+        hemisphere: Literal["north", "south"]
+    ) -> np.ndarray:
+        # weighted categorical draw for landscape_type
+        params = LANDSCAPE_TYPE_PARAMS[hemisphere]
+        self._logger.info(
+            "Generating Landscape Type for %s.\n"
+            "Categories: %s\nWeights: %s\nFallback: '%s'",
+            params.label, params.categories, params.weights, params.fallback_category 
+        )
+
+        # vectorized weighted random selection
+        try:
+            result = self._rng.choice(
+                a=np.array(params.categories, dtype=object),
+                size=population_size,
+                replace=True,
+                p=params.weight_array
+            )
+        except ValueError as e:
+            # FP normalization fallback
+            self._logger.warning(
+                "RNG weight normalization failed (%s)."
+                "Applying fallback: all -> '%s'.",
+                e, params.fallback_category
+            )
+            result = np.full(
+                population_size,
+                params.fallback_category,
+                dtype=object
+            )
+
+        self._logger.info(
+            "Landscape Type Stats | unique=%d | mode='%s' | n=%d",
+            len(np.unique(result)), pd.Series(result).mode().iloc[0], population_size,
         )
 
         return result

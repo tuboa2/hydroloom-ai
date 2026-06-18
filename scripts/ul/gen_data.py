@@ -50,8 +50,8 @@ def main() -> None:
 
     # 3. generate occupancy count and appliance efficiency score
     logger.info("Running Household Demographic Simulation...")
-    df_occupancy_count_north, df_appliance_efficiency_north = household_demographic_simulator.run(global_config=global_config, population_size=global_config.population_size, hemisphere="north")
-    df_occupancy_count_south, df_appliance_efficiency_south = household_demographic_simulator.run(global_config=global_config, population_size=global_config.population_size, hemisphere="south")
+    df_occupancy_count_north, df_appliance_efficiency_north, df_landscape_north = household_demographic_simulator.run(global_config=global_config, population_size=global_config.population_size, hemisphere="north")
+    df_occupancy_count_south, df_appliance_efficiency_south, df_landscape_south = household_demographic_simulator.run(global_config=global_config, population_size=global_config.population_size, hemisphere="south")
     logger.info(
         "Generated %d rows for North Occupancy Counts, %d rows for South Occupancy Counts\n",
         len(df_occupancy_count_north),
@@ -73,6 +73,8 @@ def main() -> None:
     df_occupancy_count_south.to_csv(data_dir / "south_occupancy.csv", index=False)
     df_appliance_efficiency_north.to_csv(data_dir / "north_appliance_efficiency.csv", index=False)
     df_appliance_efficiency_south.to_csv(data_dir / "south_appliance_efficiency.csv", index=False)
+    df_landscape_north.to_csv(data_dir / "north_landscape.csv", index=False)
+    df_landscape_south.to_csv(data_dir / "south_landscape.csv", index=False)
 
     # done
     logger.info("UL Data Gen Execution Successfully Finished")

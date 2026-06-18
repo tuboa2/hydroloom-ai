@@ -5,7 +5,8 @@ from ul_core import (
     HouseholdDemographicSimulator,
     GlobalInitializer,
     OCCUPANCY_PARAMS,
-    APPLIANCE_EFFICIENCY_PARAMS
+    APPLIANCE_EFFICIENCY_PARAMS,
+    LANDSCAPE_TYPE_PARAMS
 )
 from typing import Literal
 
@@ -52,7 +53,31 @@ def run(
         upper_bound=appliance_params.upper_bound,
     )
 
-    return pd.DataFrame(occupancy_count), pd.DataFrame(appliance_scores)
+    # generate landscape type
+    landscape_params = LANDSCAPE_TYPE_PARAMS[hemisphere]
+    landscape_type = household_demo_sim.generate_landscape_type(
+        population_size=population_size,
+        hemisphere=hemisphere,
+    )
+
+    _validate_landscape_type(
+        landscape_type,
+        population_size=population_size,
+        label=landscape_params.label,
+        expected_categories=landscape_params.categories,
+        expected_weights=landscape_params.weights,
+    )
+
+    logger.info(
+        "Landscape Type Generation Complete for %s.\n",
+        landscape_params.label,
+    )
+
+    return (
+        pd.DataFrame(occupancy_count),
+        pd.DataFrame(appliance_scores),
+        pd.DataFrame(landscape_type, columns=["landscape_type"]),
+    )
 
 # validate occupancy count
 def _validate_occupancy(
@@ -137,3 +162,42 @@ def _validate_efficiency(
             label, observed_mean, expected_mean, deviation * 100,
         )
 
+def _validate_landscape_type(
+    arr: np.ndarray,
+    *,
+    population_size: int,
+    label: str,
+    expected_categories: tuple[str, ...],
+    expected_weights: tuple[float, ...],
+    tolerance: float = 0.15,
+) -> None:
+    """Post-generation invariant checks for landscape_type."""
+    # Shape check
+    assert arr.shape == (population_size,), (
+        f"{label}: expected shape ({population_size},), got {arr.shape}"
+    )
+
+    # Category integrity — no invalid labels
+    unique_observed = set(arr)
+    valid_set = set(expected_categories)
+    invalid = unique_observed - valid_set
+    assert not invalid, (
+        f"{label}: invalid categories detected: {invalid}"
+    )
+
+    # Statistical sanity (soft check)
+    for cat, w in zip(expected_categories, expected_weights):
+        observed_frac = np.sum(arr == cat) / population_size
+        deviation = abs(observed_frac - w) / w if w > 0 else 0.0
+        if deviation > tolerance:
+            logger.warning(
+                "%s: category '%s' observed %.3f, expected %.3f "
+                "(deviation %.1f%%)",
+                label, cat, observed_frac, w, deviation * 100,
+            )
+        else:
+            logger.info(
+                "%s: category '%s' frac=%.3f (expected ≈%.2f, "
+                "deviation=%.2f%%)",
+                label, cat, observed_frac, w, deviation * 100,
+            )
