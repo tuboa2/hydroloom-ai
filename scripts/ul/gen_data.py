@@ -2,6 +2,7 @@
 from __future__ import annotations
 from pathlib import Path
 import logging
+import pandas as pd
 import global_init as global_init # global initialization 
 import environmental_simulator as environmental_simulator # temp generator
 import household_demographic_simulator as household_demographic_simulator
@@ -46,35 +47,21 @@ def main() -> None:
         len(df_north_rainfall),
         len(df_south_rainfall)
     )
+    df_north_env = pd.concat([df_north_temp['daily_max_temp_celsius'], df_north_rainfall['daily_rainfall_mm']], axis=1)
+    df_south_env = pd.concat([df_south_temp['daily_max_temp_celsius'], df_south_rainfall['daily_rainfall_mm']], axis=1)
     logger.info("Environmental Simulation Complete.\n")
 
     # 3. generate occupancy count and appliance efficiency score
     logger.info("Running Household Demographic Simulation...")
-    df_occupancy_count_north, df_appliance_efficiency_north, df_landscape_north = household_demographic_simulator.run(global_config=global_config, population_size=global_config.population_size, hemisphere="north")
-    df_occupancy_count_south, df_appliance_efficiency_south, df_landscape_south = household_demographic_simulator.run(global_config=global_config, population_size=global_config.population_size, hemisphere="south")
-    logger.info(
-        "Generated %d rows for North Occupancy Counts, %d rows for South Occupancy Counts\n",
-        len(df_occupancy_count_north),
-        len(df_occupancy_count_south),
-    )
-    logger.info(
-        "Generated %d rows for North Appliance Efficiency Score, %d rows for South Appliance Efficiency Score",
-        len(df_appliance_efficiency_north),
-        len(df_appliance_efficiency_south),
-    )
+    df_north_household = household_demographic_simulator.run(global_config=global_config, population_size=global_config.population_size, hemisphere="north")
+    df_south_household = household_demographic_simulator.run(global_config=global_config, population_size=global_config.population_size, hemisphere="south")
     logger.info("House Demographic Simulation Complete.\n")
 
     # export dataframe
-    df_north_temp.to_csv(data_dir / "north_temp.csv", index=False)
-    df_south_temp.to_csv(data_dir / "south_temp.csv", index=False)
-    df_north_rainfall.to_csv(data_dir / "north_rainfall.csv", index=False)
-    df_south_rainfall.to_csv(data_dir / "south_rainfall.csv", index=False)
-    df_occupancy_count_north.to_csv(data_dir / "north_occupancy.csv", index=False)
-    df_occupancy_count_south.to_csv(data_dir / "south_occupancy.csv", index=False)
-    df_appliance_efficiency_north.to_csv(data_dir / "north_appliance_efficiency.csv", index=False)
-    df_appliance_efficiency_south.to_csv(data_dir / "south_appliance_efficiency.csv", index=False)
-    df_landscape_north.to_csv(data_dir / "north_landscape.csv", index=False)
-    df_landscape_south.to_csv(data_dir / "south_landscape.csv", index=False)
+    df_north_env.to_csv(data_dir / "north_environment.csv", index=False)
+    df_south_env.to_csv(data_dir / "south_environment.csv", index=False)
+    df_north_household.to_csv(data_dir / "north_household.csv", index=False)
+    df_south_household.to_csv(data_dir / "south_household.csv", index=False)
 
     # done
     logger.info("UL Data Gen Execution Successfully Finished")

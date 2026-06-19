@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 import logging
-import uuid
+import uuid_utils as uuid
 import numpy as np
 import pandas as pd
 from numpy.random import Generator
