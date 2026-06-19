@@ -20,6 +20,16 @@ def run(
     # get the household demographic simulator instance
     household_demo_sim = HouseholdDemographicSimulator(global_config.rng)
 
+    # generate household ids
+    household_ids = household_demo_sim.generate_household_ids(
+        population_size=population_size
+    )
+    _validate_household_ids(
+        household_ids,
+        population_size=population_size,
+        label=f"{hemisphere.capitalize()} Hemisphere",
+    )
+
     # get the params
     occupancy_params = OCCUPANCY_PARAMS[hemisphere]
 
@@ -73,10 +83,42 @@ def run(
         landscape_params.label,
     )
 
-    return (
-        pd.DataFrame(occupancy_count),
-        pd.DataFrame(appliance_scores),
-        pd.DataFrame(landscape_type, columns=["landscape_type"]),
+    df = pd.DataFrame({
+        "household_id": household_ids,
+        "occupancy_count": occupancy_count,
+        "appliance_efficiency_score": appliance_scores,
+        "landscape_type": landscape_type,
+    })
+
+    return df
+
+# validate household ids
+def _validate_household_ids(
+    arr: np.ndarray,
+    *,
+    population_size: int,
+    label: str,
+) -> None:
+    """Post-generation invariant checks for household_id."""
+    # Shape check
+    assert arr.shape == (population_size,), (
+        f"{label}: expected shape ({population_size},), got {arr.shape}"
+    )
+
+    # Uniqueness check (redundant with generation, but validates post-hoc)
+    unique_count = len(np.unique(arr))
+    assert unique_count == population_size, (
+        f"{label}: expected {population_size} unique IDs, got {unique_count}"
+    )
+
+    # Format check — all entries must be non-empty strings
+    assert all(isinstance(x, str) and len(x) > 0 for x in arr), (
+        f"{label}: invalid ID format detected"
+    )
+
+    logger.info(
+        "%s: %d unique household IDs verified.",
+        label, unique_count,
     )
 
 # validate occupancy count

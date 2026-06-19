@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 import logging
+import uuid
 import numpy as np
 import pandas as pd
 from numpy.random import Generator
@@ -321,6 +322,34 @@ class HouseholdDemographicSimulator:
     def __init__(self, rng: Generator) -> None:
         self._rng = rng
         self._logger = logging.getLogger(__name__)
+
+    def generate_household_ids(self, population_size: int) -> np.ndarray:
+        # generates uuid v7
+        self._logger.info(
+            "Generating %d household UUIDs (v7)....",
+            population_size
+        )
+        # 1. generate uuids via iteration
+        id_set: set[str] = set()
+        id_list: list[str] = []
+
+        for _ in range(population_size):
+            new_id = str(uuid.uuid7())
+            id_set.add(new_id)
+            id_list.append(new_id)
+
+        # 2. hash-set uniqueness assertion
+        assert len(id_set) == population_size, (
+            f"UUID Collision Detected: Generated {len(id_set)} unique IDs from {population_size} attempts."
+        )
+
+        result = np.array(id_list, dtype=object)
+
+        self._logger.info(
+            "Household ID Stats | unique=%d | sample='%s'", len(id_set), result[0]
+        )
+
+        return result
 
     def generate_occupancy_count(
         self,
