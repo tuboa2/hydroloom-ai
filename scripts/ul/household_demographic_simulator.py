@@ -15,10 +15,12 @@ logger = logging.getLogger(__name__)
 def run(
     global_config: GlobalInitializer,
     population_size: int,
-    hemisphere: Literal["north", "south"]
+    hemisphere: Literal["north", "south"],
+    daily_max_temp_celsius: np.ndarray,
+    daily_rainfall_mm: np.ndarray
 ) -> pd.DataFrame:
     # get the household demographic simulator instance
-    household_demo_sim = HouseholdDemographicSimulator(global_config.rng)
+    household_demo_sim = HouseholdDemographicSimulator(global_config)
 
     # generate household ids
     household_ids = household_demo_sim.generate_household_ids(
@@ -78,19 +80,38 @@ def run(
         expected_weights=landscape_params.weights,
     )
 
+    # generate daily water usage in liters
+    daily_water_usage_liters = household_demo_sim.generate_daily_water_usage_liters(
+        occupancy_count=occupancy_count,
+        appliance_efficiency_score=appliance_scores,
+        landscape_type=landscape_type,
+        daily_max_temp_celsius=daily_max_temp_celsius,
+        daily_rainfall_mm=daily_rainfall_mm,
+        hemisphere=hemisphere
+    )
+
+    _validate_water_usage(
+        daily_water_usage_liters,
+        population_size=population_size,
+        simulation_days=global_config.simulation_days,
+        occupancy_count=occupancy_count,
+        hemisphere=hemisphere,
+        label = landscape_params.label
+    )
+
     logger.info(
         "Landscape Type Generation Complete for %s.\n",
         landscape_params.label,
     )
 
-    df = pd.DataFrame({
+    df_traits = pd.DataFrame({
         "household_id": household_ids,
         "occupancy_count": occupancy_count,
         "appliance_efficiency_score": appliance_scores,
         "landscape_type": landscape_type,
     })
 
-    return df
+    return df_traits, pd.DataFrame(daily_water_usage_liters)
 
 # validate household ids
 def _validate_household_ids(
@@ -243,3 +264,46 @@ def _validate_landscape_type(
                 "deviation=%.2f%%)",
                 label, cat, observed_frac, w, deviation * 100,
             )
+
+def _validate_water_usage(
+    arr: np.ndarray,
+    *,
+    population_size: int,
+    simulation_days: int,
+    occupancy_count: np.ndarray,
+    hemisphere: Literal["north", "south"],
+    label: str,
+) -> None:
+    """Post-generation invariant checks for daily_water_usage_liters."""
+    # 1. Shape check (Must be a 2D matrix: Households x Days)
+    assert arr.shape == (population_size, simulation_days), (
+        f"{label}: expected shape ({population_size}, {simulation_days}), got {arr.shape}"
+    )
+    
+    # 2. Dtype check
+    assert arr.dtype == np.float32, (
+        f"{label}: expected float32, got {arr.dtype}"
+    )
+    
+    # 3. NaN / Inf integrity check
+    assert not np.isnan(arr).any(), f"{label}: NaN detected in water usage matrix"
+    assert not np.isinf(arr).any(), f"{label}: Inf detected in water usage matrix"
+    
+    # 4. Physiological floor check
+    # Re-establish the exact hemispheric constants used in ul_core.py
+    physiological_intake = np.float32(3.0) if hemisphere == "north" else np.float32(3.2)
+    
+    # Broadcast 1D occupancy to 2D floor matrix (Population, 1)
+    abs_floor = (occupancy_count.astype(np.float32) * physiological_intake)[:, np.newaxis]
+    
+    # Assert that no value falls below the absolute physiological minimum
+    # (Using a microscopic epsilon to guard against floating-point comparison artifacts)
+    assert (arr >= (abs_floor - 1e-5)).all(), (
+        f"{label}: values detected below the physiological intake floor"
+    )
+    
+    # 5. Statistical sanity (soft check — logged, not asserted)
+    logger.info(
+        "%s Water Usage Matrix Stats | global_mean=%.2f L/day | std=%.2f | min=%.2f | max=%.2f",
+        label, arr.mean(), arr.std(), arr.min(), arr.max()
+    )

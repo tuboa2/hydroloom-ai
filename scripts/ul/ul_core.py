@@ -23,7 +23,7 @@ __all__ = [
 class SimulationConfig:
     # Immutable configuration parameters for the entire simulation.
     simulation_days: int = 365
-    population_size: int = 1000
+    population_size: int = 2500
     random_seed: int = 2026
 
     def __post_init__(self) -> None:
@@ -82,6 +82,10 @@ class GlobalInitializer:
     @property
     def temporal_index(self) -> np.ndarray:
         return self._temporal_index
+
+    @property
+    def simulation_days(self) -> np.int32:
+        return len(self._temporal_index)
 
     @property
     def population_size(self) -> int:
@@ -319,8 +323,10 @@ LANDSCAPE_TYPE_PARAMS: dict[str, LandscapeTypeParams] = {
 
 class HouseholdDemographicSimulator:
     # generates occupancy_count arrays via Negative Binomial
-    def __init__(self, rng: Generator) -> None:
-        self._rng = rng
+    def __init__(self, global_config: GlobalInitializer) -> None:
+        self._rng = global_config.rng
+        self._population_size = global_config.population_size
+        self._simulation_days = global_config.simulation_days
         self._logger = logging.getLogger(__name__)
 
     def generate_household_ids(self, population_size: int) -> np.ndarray:
@@ -460,3 +466,73 @@ class HouseholdDemographicSimulator:
         )
 
         return result
+
+    def generate_daily_water_usage_liters(
+        self,
+        occupancy_count: np.ndarray,
+        appliance_efficiency_score: np.ndarray,
+        landscape_type: np.ndarray,
+        daily_max_temp_celsius: np.ndarray,
+        daily_rainfall_mm: np.ndarray,
+        hemisphere: Literal["north", "south"],
+    ) -> np.ndarray:
+        # computes daily_water_usage_liters through simd vectorization
+        total_usage_liters = np.empty((self._population_size, self._simulation_days), dtype=np.float32)
+
+        # hemispheric parameter initialization
+        if (hemisphere == "north"):
+            weekend_multiplier = np.float32(1.10)
+            physiological_intake = np.float32(3.0)
+            per_capita_baseline = np.float32(128.0)
+            baseline_temp = np.float32(15.2)
+        elif (hemisphere == "south"):
+            weekend_multiplier = np.float32(1.52)
+            physiological_intake = np.float32(3.2)
+            per_capita_baseline = np.float32(128.2)
+            baseline_temp = np.float32(13.3)
+        
+        # broadcasting dimenstionality alignment
+        occupancy_2d = occupancy_count.astype(np.float32)[:, np.newaxis]
+        appliance_efficiency_2d = appliance_efficiency_score.astype(np.float32)[:, np.newaxis]
+
+        # indoor baseline vector operations
+        day_indices = np.arange(self._simulation_days, dtype=np.int32)
+        is_weekend = ((day_indices % 7) >= 5).astype(np.float32)
+        temporal_multiplier = np.where(is_weekend == 1, weekend_multiplier, np.float32(1.0))[np.newaxis, :]
+
+        indoor_baseline = (physiological_intake + (occupancy_2d * temporal_multiplier * per_capita_baseline)) / appliance_efficiency_2d
+
+        # outdoor demand vector operations
+        temperature_2d = daily_max_temp_celsius.astype(np.float32)[np.newaxis, :]
+        rainfall_2d = daily_rainfall_mm.astype(np.float32)[np.newaxis, :]
+
+        # simplified hargreaves-samani evapotranspiration heuristic
+        et_rate = np.maximum(temperature_2d - baseline_temp, 0.0)
+        env_deficit = np.maximum(et_rate - rainfall_2d, 0.0)
+
+        # landscape type string mapping to float coefs
+        landscape_map = {
+            "turfgrass_dominant": 1.2,
+            "hardscape_dominant": 0.1,
+            "container_balcony": 0.25,
+            "xeriscape_native": 0.35,
+            "food_homegarden": 0.8
+        }
+        landscape_coeffs = np.array(
+            [landscape_map.get(lt, 0.5) for lt in landscape_type],
+            dtype=np.float32
+        )[:, np.newaxis]
+
+        outdoor_demand = env_deficit * landscape_coeffs
+
+        # axiomatic noise injection
+        human_noise = self._rng.normal(loc=0.0, scale=4.5, size=(self._population_size, self._simulation_days)).astype(np.float32)
+
+        # matrix assembly
+        total_usage_liters = indoor_baseline + outdoor_demand + human_noise
+
+        # enforce physiological baseline to block mathematically impossible values
+        abs_floor = occupancy_2d * physiological_intake
+        np.maximum(total_usage_liters, abs_floor, out=total_usage_liters)
+
+        return total_usage_liters

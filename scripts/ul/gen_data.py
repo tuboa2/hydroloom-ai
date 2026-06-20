@@ -53,8 +53,8 @@ def main() -> None:
 
     # 3. generate occupancy count and appliance efficiency score
     logger.info("Running Household Demographic Simulation...")
-    df_north_household = household_demographic_simulator.run(global_config=global_config, population_size=global_config.population_size, hemisphere="north")
-    df_south_household = household_demographic_simulator.run(global_config=global_config, population_size=global_config.population_size, hemisphere="south")
+    df_north_household, df_north_water_usage = household_demographic_simulator.run(global_config=global_config, population_size=global_config.population_size, hemisphere="north", daily_max_temp_celsius=df_north_env["daily_max_temp_celsius"].to_numpy(), daily_rainfall_mm=df_north_env["daily_rainfall_mm"].to_numpy())
+    df_south_household, df_south_water_usage = household_demographic_simulator.run(global_config=global_config, population_size=global_config.population_size, hemisphere="south", daily_max_temp_celsius=df_south_env["daily_max_temp_celsius"].to_numpy(), daily_rainfall_mm=df_south_env["daily_rainfall_mm"].to_numpy())
     logger.info("House Demographic Simulation Complete.\n")
 
     # export dataframe
@@ -62,6 +62,8 @@ def main() -> None:
     df_south_env.to_csv(data_dir / "south_environment.csv", index=False)
     df_north_household.to_csv(data_dir / "north_household.csv", index=False)
     df_south_household.to_csv(data_dir / "south_household.csv", index=False)
+    df_north_water_usage.to_csv(data_dir / "north_water_usage.csv", index=False)
+    df_south_water_usage.to_csv(data_dir / "south_water_usage.csv", index=False)
 
     # done
     logger.info("UL Data Gen Execution Successfully Finished")
