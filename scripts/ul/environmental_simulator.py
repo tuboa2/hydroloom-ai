@@ -2,8 +2,8 @@
 from __future__ import annotations
 import logging
 import pandas as pd
-from ul_core import (
-    EnvironmentalSimulator,
+from ul_core import EnvironmentalSimulator
+from config import (
     GlobalInitializer,
     SimulationConfig,
 )
@@ -69,7 +69,7 @@ def run(
         df_south_rainfall["daily_rainfall_mm"].min(),
         df_south_rainfall["daily_rainfall_mm"].max(),  
     )
-    logger.info("Phase 2 validation passed. Ready for the next step.")
+    logger.info("Temperature and rainfall validation passed. Ready for the next step.")
 
     return df_north_temp, df_south_temp, df_north_rainfall, df_south_rainfall
 
@@ -158,3 +158,4 @@ if __name__ == "__main__":
     print(f"  South: {df_s.shape[0]} rows, "
           f"range {df_s['daily_max_temp_celsius'].min():.2f}°C "
           f"– {df_s['daily_max_temp_celsius'].max():.2f}°C")
+    

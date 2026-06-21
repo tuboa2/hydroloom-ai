@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 import logging
 import pandas as pd
-import global_init as global_init # global initialization 
-import environmental_simulator as environmental_simulator # temp generator
+import global_init as global_init  # global initialization
+import environmental_simulator as environmental_simulator  # temp generator
 import household_demographic_simulator as household_demographic_simulator
 
 # logging config
@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 parent_dir = Path(__file__).resolve().parent.parent.parent
 print(parent_dir)
 data_dir = parent_dir / "data"
-data_dir.mkdir(parents=True,exist_ok=True)
+data_dir.mkdir(parents=True, exist_ok=True)
+
 
 def main() -> None:
     # run the data gen pipeline
@@ -29,14 +30,16 @@ def main() -> None:
     logger.info("Creating Global Initialization...")
     global_config = global_init.run(
         simulation_days=365,
-        population_size=2500,
+        population_size=100000,
         random_seed=2026,
     )
     logger.info("Global Initialization Complete.\n")
 
     # 2. generate temperature data through environment simulation
     logger.info("Running Environmental Simulation...")
-    df_north_temp, df_south_temp, df_north_rainfall, df_south_rainfall = environmental_simulator.run(global_config)
+    df_north_temp, df_south_temp, df_north_rainfall, df_south_rainfall = (
+        environmental_simulator.run(global_config)
+    )
     logger.info(
         "Generated %d rows for North Temp, %d rows for South Temp",
         len(df_north_temp),
@@ -45,16 +48,40 @@ def main() -> None:
     logger.info(
         "Generated %d rows for North Rainfall, %d rows for South Rainfall",
         len(df_north_rainfall),
-        len(df_south_rainfall)
+        len(df_south_rainfall),
     )
-    df_north_env = pd.concat([df_north_temp['daily_max_temp_celsius'], df_north_rainfall['daily_rainfall_mm']], axis=1)
-    df_south_env = pd.concat([df_south_temp['daily_max_temp_celsius'], df_south_rainfall['daily_rainfall_mm']], axis=1)
+    df_north_env = pd.concat(
+        [
+            df_north_temp["daily_max_temp_celsius"],
+            df_north_rainfall["daily_rainfall_mm"],
+        ],
+        axis=1,
+    )
+    df_south_env = pd.concat(
+        [
+            df_south_temp["daily_max_temp_celsius"],
+            df_south_rainfall["daily_rainfall_mm"],
+        ],
+        axis=1,
+    )
     logger.info("Environmental Simulation Complete.\n")
 
     # 3. generate occupancy count and appliance efficiency score
     logger.info("Running Household Demographic Simulation...")
-    df_north_household, df_north_water_usage = household_demographic_simulator.run(global_config=global_config, population_size=global_config.population_size, hemisphere="north", daily_max_temp_celsius=df_north_env["daily_max_temp_celsius"].to_numpy(), daily_rainfall_mm=df_north_env["daily_rainfall_mm"].to_numpy())
-    df_south_household, df_south_water_usage = household_demographic_simulator.run(global_config=global_config, population_size=global_config.population_size, hemisphere="south", daily_max_temp_celsius=df_south_env["daily_max_temp_celsius"].to_numpy(), daily_rainfall_mm=df_south_env["daily_rainfall_mm"].to_numpy())
+    df_north_household, df_north_water_usage = household_demographic_simulator.run(
+        global_config=global_config,
+        population_size=global_config.population_size,
+        hemisphere="north",
+        daily_max_temp_celsius=df_north_env["daily_max_temp_celsius"].to_numpy(),
+        daily_rainfall_mm=df_north_env["daily_rainfall_mm"].to_numpy(),
+    )
+    df_south_household, df_south_water_usage = household_demographic_simulator.run(
+        global_config=global_config,
+        population_size=global_config.population_size,
+        hemisphere="south",
+        daily_max_temp_celsius=df_south_env["daily_max_temp_celsius"].to_numpy(),
+        daily_rainfall_mm=df_south_env["daily_rainfall_mm"].to_numpy(),
+    )
     logger.info("House Demographic Simulation Complete.\n")
 
     # export dataframe
@@ -62,11 +89,16 @@ def main() -> None:
     df_south_env.to_csv(data_dir / "south_environment.csv", index=False)
     df_north_household.to_csv(data_dir / "north_household.csv", index=False)
     df_south_household.to_csv(data_dir / "south_household.csv", index=False)
-    df_north_water_usage.to_csv(data_dir / "north_water_usage.csv", index=False)
-    df_south_water_usage.to_csv(data_dir / "south_water_usage.csv", index=False)
+    df_north_water_usage.to_parquet(
+        data_dir / "north_water_usage.parquet", engine='pyarrow', index=False
+    )
+    df_south_water_usage.to_parquet(
+        data_dir / "south_water_usage.parquet", engine='pyarrow', index=False
+    )
 
     # done
     logger.info("UL Data Gen Execution Successfully Finished")
+
 
 if __name__ == "__main__":
     main()
