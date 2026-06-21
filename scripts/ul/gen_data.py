@@ -22,7 +22,7 @@ data_dir = parent_dir / "data"
 data_dir.mkdir(parents=True, exist_ok=True)
 
 
-def main() -> None:
+def run() -> None:
     # run the data gen pipeline
     logger.info("UL Data Gen Pipeline Execution Started")
 
@@ -101,4 +101,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    run()

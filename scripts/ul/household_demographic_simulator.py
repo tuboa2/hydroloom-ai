@@ -41,7 +41,7 @@ def run(
     # validate
     _validate_occupancy(
         occupancy_count,
-        population_size=2500,
+        population_size=population_size,
         label=occupancy_params.label,
         expected_mean=occupancy_params.mu + 1
     )

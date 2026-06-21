@@ -13,7 +13,7 @@ __all__ = [
 class SimulationConfig:
     # Immutable configuration parameters for the entire simulation.
     simulation_days: int = 365
-    population_size: int = 2500
+    population_size: int = 100000
     random_seed: int = 2026
 
     def __post_init__(self) -> None:
