@@ -5,7 +5,7 @@ from typing import Literal
 import logging
 import uuid_utils as uuid
 import numpy as np
-import pandas as pd
+import polars as pl
 from numpy.random import Generator
 from config import GlobalInitializer
 
@@ -52,7 +52,7 @@ class EnvironmentalSimulator:
     def generate_daily_max_temp(
         self, 
         hemisphere: Literal["north", "south"]
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         # 1. Hemispheric parameters
         if hemisphere == "north":
             annual_mean = 15.2
@@ -85,13 +85,19 @@ class EnvironmentalSimulator:
             weather_noise = self._generate_ou_noise(theta=0.25, sigma=0.71, noise_bounds=noise_bounds)
 
         # 5. Package into a structured DataFrame
-        return pd.DataFrame(
+        return pl.DataFrame(
             {
                 "day_index": self._temporal_index,
                 "base_seasonal_temp_celsius": np.round(base_curve, 2),
                 "ou_volatility_noise": np.round(weather_noise, 2),
-                "daily_max_temp_celsius": np.round(base_curve + weather_noise, 2).clip(bounds[0], bounds[1]).astype(np.float32),
-            }
+                "daily_max_temp_celsius": np.round(base_curve + weather_noise, 2).clip(bounds[0], bounds[1]),
+            },
+            strict=False,
+        ).select(
+            pl.col("day_index").cast(pl.Int32),
+            pl.col("base_seasonal_temp_celsius").cast(pl.Float32),
+            pl.col("ou_volatility_noise").cast(pl.Float32),
+            pl.col("daily_max_temp_celsius").cast(pl.Float32),
         )
     
     # generate daily rainfall
@@ -104,7 +110,7 @@ class EnvironmentalSimulator:
         gamma_scale: float = 28.4812368282,
         wet_floor: float = 0.1,
         cap: float = 75.0
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         # cast temp input to float32
         temp_f32 = daily_temp.astype(np.float32)
 
@@ -138,13 +144,19 @@ class EnvironmentalSimulator:
         daily_rainfall_mm = (wet_mask.astype(np.float32) * raw_volume)
 
         # package
-        return pd.DataFrame(
+        return pl.DataFrame(
             {
                 "day_index": self._temporal_index,
                 "rain_probability": np.round(prob_rain, 4),
                 "wet_dry_state": wet_mask,
                 "daily_rainfall_mm": np.round(daily_rainfall_mm, 2)
-            }
+            },
+            strict=False,
+        ).select(
+            pl.col("day_index").cast(pl.Int32),
+            pl.col("rain_probability").cast(pl.Float32),
+            pl.col("wet_dry_state").cast(pl.Int32),
+            pl.col("daily_rainfall_mm").cast(pl.Float32),
         )
 
 @dataclass(frozen=True)
@@ -389,7 +401,7 @@ class HouseholdDemographicSimulator:
 
         self._logger.info(
             "Landscape Type Stats | unique=%d | mode='%s' | n=%d",
-            len(np.unique(result)), pd.Series(result).mode().iloc[0], population_size,
+            len(np.unique(result)), pl.Series(result).mode().item(0), population_size,
         )
 
         return result

@@ -2,7 +2,7 @@
 from __future__ import annotations
 from pathlib import Path
 import logging
-import pandas as pd
+import polars as pl
 import global_init as global_init  # global initialization
 import environmental_simulator as environmental_simulator  # temp generator
 import household_demographic_simulator as household_demographic_simulator
@@ -50,19 +50,19 @@ def run() -> None:
         len(df_north_rainfall),
         len(df_south_rainfall),
     )
-    df_north_env = pd.concat(
+    df_north_env = pl.concat(
         [
-            df_north_temp["daily_max_temp_celsius"],
-            df_north_rainfall["daily_rainfall_mm"],
+            df_north_temp.select("daily_max_temp_celsius"),
+            df_north_rainfall.select("daily_rainfall_mm"),
         ],
-        axis=1,
+        how="horizontal",
     )
-    df_south_env = pd.concat(
+    df_south_env = pl.concat(
         [
-            df_south_temp["daily_max_temp_celsius"],
-            df_south_rainfall["daily_rainfall_mm"],
+            df_south_temp.select("daily_max_temp_celsius"),
+            df_south_rainfall.select("daily_rainfall_mm"),
         ],
-        axis=1,
+        how="horizontal",
     )
     logger.info("Environmental Simulation Complete.\n")
 
@@ -85,15 +85,15 @@ def run() -> None:
     logger.info("House Demographic Simulation Complete.\n")
 
     # export dataframe
-    df_north_env.to_csv(data_dir / "north_environment.csv", index=False)
-    df_south_env.to_csv(data_dir / "south_environment.csv", index=False)
-    df_north_household.to_csv(data_dir / "north_household.csv", index=False)
-    df_south_household.to_csv(data_dir / "south_household.csv", index=False)
-    df_north_water_usage.to_parquet(
-        data_dir / "north_water_usage.parquet", engine='pyarrow', index=False
+    df_north_env.write_csv(data_dir / "north_environment.csv")
+    df_south_env.write_csv(data_dir / "south_environment.csv")
+    df_north_household.write_csv(data_dir / "north_household.csv")
+    df_south_household.write_csv(data_dir / "south_household.csv")
+    df_north_water_usage.write_parquet(
+        data_dir / "north_water_usage.parquet"
     )
-    df_south_water_usage.to_parquet(
-        data_dir / "south_water_usage.parquet", engine='pyarrow', index=False
+    df_south_water_usage.write_parquet(
+        data_dir / "south_water_usage.parquet"
     )
 
     # done

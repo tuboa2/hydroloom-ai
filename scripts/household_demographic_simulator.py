@@ -1,5 +1,5 @@
 import numpy as np
-import pandas as pd
+import polars as pl
 import logging
 from ul_core import (
     HouseholdDemographicSimulator,
@@ -18,7 +18,7 @@ def run(
     hemisphere: Literal["north", "south"],
     daily_max_temp_celsius: np.ndarray,
     daily_rainfall_mm: np.ndarray
-) -> pd.DataFrame:
+) -> pl.DataFrame:
     # get the household demographic simulator instance
     household_demo_sim = HouseholdDemographicSimulator(global_config)
 
@@ -104,14 +104,23 @@ def run(
         landscape_params.label,
     )
 
-    df_traits = pd.DataFrame({
+    df_traits = pl.DataFrame({
         "household_id": household_ids,
         "occupancy_count": occupancy_count,
         "appliance_efficiency_score": appliance_scores,
         "landscape_type": landscape_type,
-    })
+    }, strict=False).select(
+        pl.col("household_id").cast(pl.String),
+        pl.col("occupancy_count").cast(pl.Int32),
+        pl.col("appliance_efficiency_score").cast(pl.Float32),
+        pl.col("landscape_type").cast(pl.String),
+    )
 
-    return df_traits, pd.DataFrame(daily_water_usage_liters)
+    df_water_usage = pl.DataFrame(daily_water_usage_liters, strict=False).select(
+        pl.all().cast(pl.Float32)
+    )
+
+    return df_traits, df_water_usage
 
 # validate household ids
 def _validate_household_ids(
