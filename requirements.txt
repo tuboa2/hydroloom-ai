@@ -3,3 +3,4 @@ pandas >= 3.0.3
 faker >= 40.22.0
 uuid-utils >= 0.16.2
 pyarrow >= 24.0.0
+polars >= 1.41.2

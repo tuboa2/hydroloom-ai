@@ -16,7 +16,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # get data directory
-parent_dir = Path(__file__).resolve().parent.parent.parent
+parent_dir = Path(__file__).resolve().parent.parent
 print(parent_dir)
 data_dir = parent_dir / "data"
 data_dir.mkdir(parents=True, exist_ok=True)
