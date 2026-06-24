@@ -230,7 +230,7 @@ APPLIANCE_EFFICIENCY_PARAMS: dict[str, ApplianceEfficiencyParams] = {
         alpha=9.36, beta=3.64, label="North Hemisphere"
     ),
     "south": ApplianceEfficiencyParams(
-        alpha=4.2, beta=4.55, label="South Hemisphere"
+        alpha=8.45, beta=3.85, label="South Hemisphere"
     )
 }
 
@@ -425,7 +425,7 @@ class HouseholdDemographicSimulator:
             per_capita_baseline = np.float32(128.0)
             baseline_temp = np.float32(15.2)
         elif (hemisphere == "south"):
-            weekend_multiplier = np.float32(1.52)
+            weekend_multiplier = np.float32(1.12)
             physiological_intake = np.float32(3.2)
             per_capita_baseline = np.float32(128.2)
             baseline_temp = np.float32(13.3)
