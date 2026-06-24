@@ -4,3 +4,6 @@ faker >= 40.22.0
 uuid-utils >= 0.16.2
 pyarrow >= 24.0.0
 polars >= 1.41.2
+matplotlib >= 3.11.0
+seaborn >= 0.13.2
+scipy >= 1.17.1
