@@ -230,7 +230,7 @@ APPLIANCE_EFFICIENCY_PARAMS: dict[str, ApplianceEfficiencyParams] = {
         alpha=9.36, beta=3.64, label="North Hemisphere"
     ),
     "south": ApplianceEfficiencyParams(
-        alpha=8.45, beta=3.85, label="South Hemisphere"
+        alpha=4.22, beta=4.55, label="South Hemisphere"
     )
 }
 
