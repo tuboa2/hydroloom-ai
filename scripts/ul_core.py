@@ -420,14 +420,14 @@ class HouseholdDemographicSimulator:
 
         # hemispheric parameter initialization
         if (hemisphere == "north"):
-            weekend_multiplier = np.float32(1.10)
-            physiological_intake = np.float32(3.0)
-            per_capita_baseline = np.float32(128.0)
+            weekend_multiplier = np.float32(1.45)
+            physiological_intake = np.float32(2.725)
+            per_capita_baseline = np.float32(200)
             baseline_temp = np.float32(15.2)
         elif (hemisphere == "south"):
-            weekend_multiplier = np.float32(1.12)
-            physiological_intake = np.float32(3.2)
-            per_capita_baseline = np.float32(128.2)
+            weekend_multiplier = np.float32(1.3)
+            physiological_intake = np.float32(2.35)
+            per_capita_baseline = np.float32(150)
             baseline_temp = np.float32(13.3)
         
         # broadcasting dimenstionality alignment
@@ -438,9 +438,10 @@ class HouseholdDemographicSimulator:
         day_indices = np.arange(self._simulation_days, dtype=np.int32)
         is_weekend = ((day_indices % 7) >= 5).astype(np.float32)
         temporal_multiplier = np.where(is_weekend == 1, weekend_multiplier, np.float32(1.0))[np.newaxis, :]
-
-        indoor_baseline = (physiological_intake + (occupancy_2d * temporal_multiplier * per_capita_baseline)) / appliance_efficiency_2d
-
+        
+        efficiency_penalty = 1.0 + (1.0 - appliance_efficiency_2d) 
+        indoor_baseline = (physiological_intake + (occupancy_2d * temporal_multiplier * per_capita_baseline)) * efficiency_penalty
+        
         # outdoor demand vector operations
         temperature_2d = daily_max_temp_celsius.astype(np.float32)[np.newaxis, :]
         rainfall_2d = daily_rainfall_mm.astype(np.float32)[np.newaxis, :]

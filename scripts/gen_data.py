@@ -21,7 +21,6 @@ print(parent_dir)
 data_dir = parent_dir / "data"
 data_dir.mkdir(parents=True, exist_ok=True)
 
-
 def run() -> None:
     # run the data gen pipeline
     logger.info("UL Data Gen Pipeline Execution Started")
@@ -31,7 +30,7 @@ def run() -> None:
     global_config = global_init.run(
         simulation_days=365,
         population_size=100000,
-        random_seed=2026,
+        random_seed=2030,
     )
     logger.info("Global Initialization Complete.\n")
 
@@ -98,7 +97,6 @@ def run() -> None:
 
     # done
     logger.info("UL Data Gen Execution Successfully Finished")
-
 
 if __name__ == "__main__":
     run()
