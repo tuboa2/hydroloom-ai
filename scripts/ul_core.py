@@ -76,7 +76,12 @@ class EnvironmentalSimulator:
             self._temporal_index - phase_shift
         )
 
-        base_curve = annual_mean - amplitude * np.sin(angular_curve)
+        if hemisphere == "north":
+            # fix: amplitude creates a summer peak in the middle of the year
+            base_curve = annual_mean + amplitude * np.sin(angular_curve) 
+        else:
+            # fix: amplitude creates a winter trough in the middle of the year
+            base_curve = annual_mean - amplitude * np.sin(angular_curve)
         
         # OU Distribution for Noise
         if hemisphere == "north":
@@ -452,7 +457,7 @@ class HouseholdDemographicSimulator:
 
         # simplified hargreaves-samani evapotranspiration heuristic
         et_rate = np.maximum(temperature_2d - baseline_temp, 0.0)
-        env_deficit = np.maximum(et_rate - rainfall_2d, 0.0)
+        env_deficit = np.maximum(et_rate - rainfall_2d, 0.5)
         
         # landscape type string mapping to float coefs
         landscape_map = {
@@ -478,5 +483,9 @@ class HouseholdDemographicSimulator:
         # enforce physiological baseline to block mathematically impossible values
         abs_floor = occupancy_2d * physiological_intake
         np.maximum(total_usage_liters, abs_floor, out=total_usage_liters)
+        
+        # fix: add macro grid noise
+        macro_grid_noise = self._rng.normal(loc=0.0, scale=15.0, size=self._simulation_days).astype(np.float32)
+        total_usage_liters += macro_grid_noise[np.newaxis, :]
 
         return total_usage_liters

@@ -30,7 +30,7 @@ def run() -> None:
     global_config = global_init.run(
         simulation_days=365,
         population_size=100000,
-        random_seed=2031,
+        random_seed=2032,
     )
     logger.info("Global Initialization Complete.\n")
 
