@@ -244,7 +244,7 @@ LANDSCAPE_TYPE_PARAMS: dict[str, LandscapeTypeParams] = {
             "xeriscape_native",
             "food_homegarden",
         ),
-        weights=(0.40, 0.25, 0.15, 0.12, 0.08),
+        weights=(0.35, 0.40, 0.15, 0.07, 0.03),
         label="North Hemisphere"
     ),
     "south": LandscapeTypeParams(
@@ -255,7 +255,7 @@ LANDSCAPE_TYPE_PARAMS: dict[str, LandscapeTypeParams] = {
             "xeriscape_native",
             "food_homegarden",
         ),
-        weights=(0.25, 0.30, 0.05, 0.20, 0.20),
+        weights=(0.30, 0.45, 0.15, 0.07, 0.03),
         label="South Hemisphere",
     ),
 }
@@ -424,11 +424,15 @@ class HouseholdDemographicSimulator:
             physiological_intake = np.float32(2.725)
             per_capita_baseline = np.float32(200)
             baseline_temp = np.float32(15.2)
+            # fix: add hemispheric yard area medians (sqm)
+            yard_area_sqm = np.float32(115.0)
         elif (hemisphere == "south"):
             weekend_multiplier = np.float32(1.3)
             physiological_intake = np.float32(2.35)
             per_capita_baseline = np.float32(150)
             baseline_temp = np.float32(13.3)
+            # fix: add hemispheric yard area medians (sqm)
+            yard_area_sqm = np.float32(85.0)
         
         # broadcasting dimenstionality alignment
         occupancy_2d = occupancy_count.astype(np.float32)[:, np.newaxis]
@@ -449,21 +453,21 @@ class HouseholdDemographicSimulator:
         # simplified hargreaves-samani evapotranspiration heuristic
         et_rate = np.maximum(temperature_2d - baseline_temp, 0.0)
         env_deficit = np.maximum(et_rate - rainfall_2d, 0.0)
-
+        
         # landscape type string mapping to float coefs
         landscape_map = {
-            "turfgrass_dominant": 1.2,
-            "hardscape_dominant": 0.1,
-            "container_balcony": 0.25,
-            "xeriscape_native": 0.35,
-            "food_homegarden": 0.8
+            "turfgrass_dominant": 1.0,
+            "hardscape_dominant": 0.8,
+            "container_balcony": 0.6,
+            "xeriscape_native": 0.3,
+            "food_homegarden": 0.2
         }
         landscape_coeffs = np.array(
             [landscape_map.get(lt, 0.5) for lt in landscape_type],
             dtype=np.float32
         )[:, np.newaxis]
 
-        outdoor_demand = env_deficit * landscape_coeffs
+        outdoor_demand = env_deficit * yard_area_sqm *landscape_coeffs
 
         # axiomatic noise injection
         human_noise = self._rng.normal(loc=0.0, scale=4.5, size=(self._population_size, self._simulation_days)).astype(np.float32)
