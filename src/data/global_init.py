@@ -1,7 +1,7 @@
 # global initialization
 from __future__ import annotations
 import logging
-from config import GlobalInitializer, SimulationConfig
+from data.config import GlobalInitializer, SimulationConfig
 
 # get the logger
 logger = logging.getLogger(__name__)

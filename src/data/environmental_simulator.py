@@ -2,8 +2,8 @@
 from __future__ import annotations
 import logging
 import polars as pl
-from ul_core import EnvironmentalSimulator
-from config import (
+from data.ul_core import EnvironmentalSimulator
+from data.config import (
     GlobalInitializer,
     SimulationConfig,
 )

@@ -7,7 +7,7 @@ import uuid_utils as uuid
 import numpy as np
 import polars as pl
 from numpy.random import Generator
-from config import GlobalInitializer
+from data.config import GlobalInitializer
 
 __all__ = [
     "EnvironmentalSimulator",

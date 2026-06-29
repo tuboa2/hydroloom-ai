@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 import logging
 import polars as pl
-import global_init as global_init  # global initialization
-import environmental_simulator as environmental_simulator  # temp generator
-import household_demographic_simulator as household_demographic_simulator
+import data.global_init as global_init  # global initialization
+import data.environmental_simulator as environmental_simulator  # temp generator
+import data.household_demographic_simulator as household_demographic_simulator
 
 # logging config
 logging.basicConfig(
@@ -17,8 +17,7 @@ logger = logging.getLogger(__name__)
 
 # get data directory
 parent_dir = Path(__file__).resolve().parent.parent
-print(parent_dir)
-data_dir = parent_dir / "data"
+data_dir = parent_dir / "data/raw"
 data_dir.mkdir(parents=True, exist_ok=True)
 
 def run() -> None:
