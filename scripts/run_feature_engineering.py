@@ -1,12 +1,12 @@
 import logging
 import joblib
-import numpy as np
+import polars as pl
 from pathlib import Path
 from typing import Literal
 
 from features.data_loader import DataLoader
-from features.extract_features import BehavioralFeatureExtractor
-from features.extract_features import scaling_pipeline
+# fixed: import the hemisphere isolated scaling pipeline
+from features.extract_features import north_pipeline, south_pipeline
 from features.select_features import FeatureSelection
 
 logging.basicConfig(
@@ -24,8 +24,7 @@ output_dir = parent_dir / "data/processed"
 output_dir.mkdir(parents=True, exist_ok=True)
 
 def run(hemisphere: Literal["north", "south"]):
-    # 1. load
-    logger.info(f"Loading {hemisphere} hemisphere data from {data_dir}...")
+    logger.info(f"Loading {hemisphere} hemisphere data...")
     loader = DataLoader(data_dir=data_dir, hemisphere=hemisphere)
     loader.load_and_validate()
 
@@ -35,36 +34,44 @@ def run(hemisphere: Literal["north", "south"]):
         "environment": loader._environment
     }
 
-    # 2. extract features
-    logger.info(f"Extracting features for {hemisphere} hemisphere...")
-    extractor = BehavioralFeatureExtractor(hemisphere=hemisphere)
-    X_extracted = extractor.fit_transform(X_raw)
-    logger.info(f"Extracted shape: {X_extracted.shape}")
+    # FIXED: Select the isolated pipeline corresponding to the target hemisphere
+    pipeline = north_pipeline if hemisphere == "north" else south_pipeline
 
-    # 3. scale
-    logger.info(f"Scaling features for the {hemisphere} hemisphere...")
-    X_scaled = scaling_pipeline.fit_transform(X_extracted)
-    logger.info(f"Scaled shape: {X_scaled.shape}")
+    # 1. Run Extraction and Scaling through the safe pipeline
+    logger.info(f"Processing extraction and scaling for {hemisphere} hemisphere...")
+    X_scaled = pipeline.fit_transform(X_raw)
+    
+    # Extract feature names dynamically from the ColumnTransformer step
+    scaler_step = pipeline.named_steps["scale"]
+    scaled_feature_names = [name.split("__")[-1] for name in scaler_step.get_feature_names_out()]
 
-    # 4. drop near-zero variance features
-    logger.info("Applying VarianceThreshold (0.01)")
+    # 2. Drop near-zero variance features
+    logger.info("Applying VarianceThreshold (0.01)...")
     final_selection = FeatureSelection(X_scaled)
     final_selection.variance_threshold()
-    X_final = final_selection.features
-    logger.info(f"Final shape: {X_final.shape}")
+    X_final_array = final_selection.features
+    
+    # Determine which feature names survived selection
+    supported_mask = final_selection.vt.get_support()
+    final_feature_names = [name for keep, name in zip(supported_mask, scaled_feature_names) if keep]
 
-    # 5. save artifacts
-    logger.info(f"Saving artifacts to {output_dir}")
-    np.save(output_dir / f"{hemisphere}_features.npy", X_final)
+    # 3. FIXED: Wrap back into a Polars DataFrame to keep feature headers intact
+    X_final_df = pl.DataFrame(X_final_array, schema=final_feature_names)
+    logger.info(f"Final processed shape: {X_final_df.shape}")
 
-    # 6. save fitted components for inference
+    # 4. FIXED: Save as a compressed Parquet file for seamless downstream analysis
+    parquet_path = output_dir / f"{hemisphere}_features.parquet"
+    X_final_df.write_parquet(parquet_path)
+    logger.info(f"Saved features to {parquet_path}")
+
+    # 5. Save fitted components for clean downstream inference pipelines
     joblib.dump({
-        "extractor": extractor,
-        "scaler": scaling_pipeline,
+        "extractor": pipeline.named_steps["extract"],
+        "scaler": scaler_step,
         "variance_threshold": final_selection.vt
     }, output_dir / f"{hemisphere}_pipeline_components.pkl")
 
-    logger.info(f"{hemisphere.capitalize()} Hemisphere Feature Engineering Done.")
+    logger.info(f"{hemisphere.capitalize()} Hemisphere Feature Engineering Done.\n")
 
 
 if __name__ == "__main__":

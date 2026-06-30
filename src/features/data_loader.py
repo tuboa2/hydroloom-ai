@@ -21,6 +21,10 @@ class DataLoader:
                 "landscape_type": pl.Categorical
             }
         )
+        # fixed: clipped the massive appliance efficiency score outlier
+        self._household = self._household.with_columns(
+            pl.col("appliance_efficiency_score").clip(0.15, 1.0)
+        )
         self._water_usage = pl.read_parquet(
             self.data_dir / f"{self.hemisphere}_water_usage.parquet"
         ).to_numpy().astype(np.float32)

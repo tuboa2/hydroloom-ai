@@ -1,3 +1,6 @@
+import numpy as np
+import pandas as pd
+from typing import Literal
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import (
     StandardScaler,
@@ -6,8 +9,7 @@ from sklearn.preprocessing import (
 )
 from sklearn.compose import ColumnTransformer
 from sklearn.base import BaseEstimator, TransformerMixin
-import numpy as np
-from typing import Literal
+from sklearn.base import clone
 
 class BehavioralFeatureExtractor(BaseEstimator, TransformerMixin):
     # extracts 10 behavioral features from the raw data
@@ -63,7 +65,7 @@ class BehavioralFeatureExtractor(BaseEstimator, TransformerMixin):
 
         return self
 
-    def transform(self, X: dict) -> np.ndarray:
+    def transform(self, X: dict) -> pd.DataFrame:
         household = X["household"]
         water_usage = X["water_usage"]
         occupancy = household["occupancy_count"].to_numpy().astype(np.float32)
@@ -71,7 +73,7 @@ class BehavioralFeatureExtractor(BaseEstimator, TransformerMixin):
         landscape = household["landscape_type"].to_list()
 
         n = water_usage.shape[0]
-        features = np.empty((n, 100), dtype=np.float32)
+        features = np.empty((n, 10), dtype=np.float32)
 
         mean_water_usage = water_usage.mean(axis=1)
         std_water_usage = water_usage.std(axis=1)
@@ -100,17 +102,27 @@ class BehavioralFeatureExtractor(BaseEstimator, TransformerMixin):
         )
 
         # feature 5: temperature sensitivity correlation
-        for i in range(n):
-            features[i, 4] = np.corrcoef(water_usage[i, :], self._temp_array)[0, 1]
+        # fixed: vectorized correlation
+        x_mean = water_usage.mean(axis=1, keepdims=True)
+        y_mean = self._temp_array.mean()
+        x_std = water_usage.std(axis=1)
+        y_std = self._temp_array.std()
+
+        with np.errstate(divide='ignore', invalid='ignore'):
+            covariance = ((water_usage - x_mean) * (self._temp_array - y_mean)).mean(axis=1)
+            corr = covariance / (x_std * y_std)
+            # fixed: clip raw correlations upto -0.5 only
+            features[:, 4] = np.clip(np.where(np.isnan(corr), 0.0, corr), -0.5, None)
 
         # feature 6: weekend/weekday ratio
         weekend_mean = water_usage[:, self._weekend_mask].mean(axis=1)
         weekday_mean = water_usage[:, self._weekday_mask].mean(axis=1)
-        features[:, 5] = np.where(
+        # fixed: clipped ratio upto 0.75 minimum
+        features[:, 5] = np.clip(np.where(
             weekday_mean > 0,
             weekend_mean / weekday_mean,
             1.0
-        )
+        ), 0.75, None)
 
         # feature 7: landscape demand index
         landscape_map = {
@@ -160,14 +172,35 @@ class BehavioralFeatureExtractor(BaseEstimator, TransformerMixin):
             1.0
         )
 
-        return features
+        # fixed: return a polars dataframe
+        return pd.DataFrame(features, columns=self.feature_names_)
+    
+    # new: method to get feature names out
+    def get_feature_names_out(self, input_features=None):
+        return np.array(self.feature_names_)
 
 # scaling pipeline
+# fixed: self documenting column names in string
 scaling_pipeline = ColumnTransformer(
     transformers=[
-        ("robust", RobustScaler(quantile_range=(5.0, 95.0)), [0, 3, 8]),
-        ("power", PowerTransformer(method='yeo-johnson', standardize=True), [2]),
-        ("standard", StandardScaler(), [1, 4, 5, 6, 7, 9])
+        ("robust", RobustScaler(quantile_range=(5.0, 95.0)), [
+            "log_per_capita_usage",
+            "dry_day_spike_factor",
+            "drought_responsiveness_index",
+            # fixed: used robust scaler for the efficiency score and weekend weekday ratio to scale extreme outliers
+            "efficiency_penalty_ratio",
+            "weekend_weekday_ratio",
+        ]),
+        ("power", PowerTransformer(method='yeo-johnson', standardize=True), [
+            "water_usage_cv",
+            # fixed: used power transform for temp sensitivity corr to shift the skewness from negative
+            "temp_sensitivity_corr",
+        ]),
+        ("standard", StandardScaler(), [
+            "landscape_demand_index",
+            "seasonal_amplitude_ratio",
+            "baseline_peak_ratio"
+        ])
     ],
     remainder="drop"
 )
@@ -175,11 +208,11 @@ scaling_pipeline = ColumnTransformer(
 # north hemisphere pipeline
 north_pipeline = Pipeline([
     ("extract", BehavioralFeatureExtractor(hemisphere="north")),
-    ("scale", scaling_pipeline)
+    ("scale", clone(scaling_pipeline)) # fixed: clone scaling pipeline to isolate weights for each hemisphere
 ])
 
 # south hemisphere data pipeline
 south_pipeline = Pipeline([
     ("extract", BehavioralFeatureExtractor(hemisphere="south")),
-    ("scale", scaling_pipeline)
+    ("scale", clone(scaling_pipeline)) # fixed: clone scaling pipeline to isolate weights for each hemisphere
 ])
