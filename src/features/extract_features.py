@@ -190,17 +190,16 @@ scaling_pipeline = ColumnTransformer(
             # fixed: used robust scaler for the efficiency score and weekend weekday ratio to scale extreme outliers
             "efficiency_penalty_ratio",
             "weekend_weekday_ratio",
+            # fixed: landscape demand index, seasonal amplitude ratio and baseline peak ratio from standard to robust scaler
+            "landscape_demand_index",
+            "seasonal_amplitude_ratio",
+            "baseline_peak_ratio"
         ]),
         ("power", PowerTransformer(method='yeo-johnson', standardize=True), [
             "water_usage_cv",
             # fixed: used power transform for temp sensitivity corr to shift the skewness from negative
             "temp_sensitivity_corr",
         ]),
-        ("standard", StandardScaler(), [
-            "landscape_demand_index",
-            "seasonal_amplitude_ratio",
-            "baseline_peak_ratio"
-        ])
     ],
     remainder="drop"
 )
