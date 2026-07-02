@@ -63,7 +63,7 @@ Follow these steps to seamlessly configure your local environment, generate the 
 ```bash
 # 1. Clone the repository and enter the directory
 git clone https://github.com/tuboa2/hydroloom-ai.git
-cd hydro-loom
+cd hydroloom-ai
 
 # 2. Initialize a secure Python virtual environment
 python -m venv .venv
@@ -72,16 +72,7 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 # 3. Install core dependencies
 pip install -r requirements.txt
 
-# 4. Generate the stochastic simulation data (North & South Hemispheres)
-python scripts/gen_data.py
-
-# 5. Extract features and apply variance thresholding
-python scripts/run_feature_engineering.py
-
-# 6. Train the K-Means (k=4) models
-python src/model/train_clusterer.py
-
-# 7. Launch the interactive AI Sandbox
+# 4. Launch the interactive AI Sandbox
 python sandbox.py
 ```
 
