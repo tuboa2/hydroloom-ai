@@ -71,6 +71,18 @@ def run(hemisphere: Literal["north", "south"]):
         "variance_threshold": final_selection.vt
     }, output_dir / f"{hemisphere}_pipeline_components.pkl")
 
+    # 6. get unscaled dataset
+    extractor = pipeline.named_steps["extract"]
+    unscaled_df = extractor.fit_transform(X_raw)
+    features = [
+        "log_per_capita_usage",
+        "dry_day_spike_factor",
+        "efficiency_penalty_ratio",
+        "landscape_demand_index"
+    ]
+    unscaled_df = unscaled_df[features]
+    pl.DataFrame(unscaled_df).write_parquet(output_dir / f"{hemisphere}_unscaled.parquet")
+
     logger.info(f"{hemisphere.capitalize()} Hemisphere Feature Engineering Done.\n")
 
 
