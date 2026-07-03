@@ -1,14 +1,14 @@
 import numpy as np
 import polars as pl
 import logging
-from data.ul_core import (
+from behavior_clustering.data.ul_core import (
     HouseholdDemographicSimulator,
     OCCUPANCY_PARAMS,
     APPLIANCE_EFFICIENCY_PARAMS,
     LANDSCAPE_TYPE_PARAMS
 )
 from typing import Literal
-from data.config import GlobalInitializer
+from behavior_clustering.data.config import GlobalInitializer
 
 logger = logging.getLogger(__name__)
 

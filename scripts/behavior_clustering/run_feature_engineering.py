@@ -4,10 +4,10 @@ import polars as pl
 from pathlib import Path
 from typing import Literal
 
-from features.data_loader import DataLoader
+from behavior_clustering.features.data_loader import DataLoader
 # fixed: import the hemisphere isolated scaling pipeline
-from features.extract_features import north_pipeline, south_pipeline
-from features.select_features import FeatureSelection
+from behavior_clustering.features.extract_features import north_pipeline, south_pipeline
+from behavior_clustering.features.select_features import FeatureSelection
 
 logging.basicConfig(
     level=logging.INFO,

@@ -43,6 +43,5 @@ def main():
     
     print("Success! Service B is officially complete. Ready for XGBoost.")   
 
-
 if __name__ == "__main__":
     main()

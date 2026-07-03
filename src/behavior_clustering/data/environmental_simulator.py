@@ -2,8 +2,8 @@
 from __future__ import annotations
 import logging
 import polars as pl
-from data.ul_core import EnvironmentalSimulator
-from data.config import (
+from behavior_clustering.data.ul_core import EnvironmentalSimulator
+from behavior_clustering.data.config import (
     GlobalInitializer,
     SimulationConfig,
 )

@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 import logging
 import polars as pl
-import data.global_init as global_init  # global initialization
-import data.environmental_simulator as environmental_simulator  # temp generator
-import data.household_demographic_simulator as household_demographic_simulator
+import behavior_clustering.data.global_init as global_init  # global initialization
+import behavior_clustering.data.environmental_simulator as environmental_simulator  # temp generator
+import behavior_clustering.data.household_demographic_simulator as household_demographic_simulator
 
 # logging config
 logging.basicConfig(
