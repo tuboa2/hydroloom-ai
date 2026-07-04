@@ -1,7 +1,8 @@
 venv
-.agent/
+.agents/
 contexts/
 *.env
-/data/
+data/
 __pycache__/
 hydromind.egg-info/
+figures/
