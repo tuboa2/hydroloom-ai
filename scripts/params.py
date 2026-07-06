@@ -86,7 +86,8 @@ class HemisphereTemperatureParams:
     ou_theta: float
     ou_sigma: float
     baseline_temp: float
-    climate_variability_sigma: float
+    climate_sigma: float
+    climate_rho: float
 
 # updated hemispheric temp params
 HEMISPHERE_TEMPERATURE_PARAMS: dict[str, HemisphereTemperatureParams] = {
@@ -100,7 +101,8 @@ HEMISPHERE_TEMPERATURE_PARAMS: dict[str, HemisphereTemperatureParams] = {
         ou_theta=0.25,
         ou_sigma=0.88,
         baseline_temp=18.0,
-        climate_variability_sigma=0.8
+        climate_sigma=0.3,
+        climate_rho=0.45
     ),
     "south": HemisphereTemperatureParams(
         label="South Hemisphere",
@@ -111,8 +113,9 @@ HEMISPHERE_TEMPERATURE_PARAMS: dict[str, HemisphereTemperatureParams] = {
         anomaly_bounds=(-3.0, 3.0),
         ou_theta=0.25,
         ou_sigma=0.71,
-        baseline_temp=18.0,
-        climate_variability_sigma=0.8
+        baseline_temp=14.5,
+        climate_sigma=0.125,
+        climate_rho=0.5
     )
 }
 

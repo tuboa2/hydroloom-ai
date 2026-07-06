@@ -14,8 +14,10 @@ class SimulationConfig:
     # Immutable configuration parameters for the entire simulation.
     simulation_days: int = 1825
     days_per_year: int = 365
-    population_size: int = 100000
-    random_seed: int = 2026
+    num_years: int = 5
+    population_size: int = 100_000
+    subsample: int = 5_0000
+    random_seed: int = 2032
 
     def __post_init__(self) -> None:
         if self.simulation_days <= 0:
@@ -29,6 +31,17 @@ class SimulationConfig:
         if self.random_seed < 0:
             raise ValueError(
                 f"random_seed must be a positive number. Received: {self.random_seed}"
+            )
+        if self.simulation_days != self.days_per_year * self.num_years:
+            raise ValueError(
+                f"simulation_days ({self.simulation_days}) must equal "
+                f"days_per_year × num_years "
+                f"({self.days_per_year} × {self.num_years})"
+            )
+        if self.subsample > self.population_size:
+            raise ValueError(
+                f"catchment_subsample ({self.subsample}) "
+                f"cannot exceed population_size ({self.population_size})"
             )
 
 class GlobalInitializer:
