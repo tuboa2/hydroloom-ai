@@ -6,12 +6,16 @@ __all__= [
     "ApplianceEfficiencyParams",
     "LandscapeTypeParams",
     "HemisphereTemperatureParams",
+    "PrecipitationParams",
+    "AMCParams",
     "HEMISPHERE_TEMPERATURE_PARAMS",
     "SEASON_BOUNDARIES_NORTH",
     "SOUTH_PHASE_SHIFT",
     "OCCUPANCY_PARAMS",
     "APPLIANCE_EFFICIENCY_PARAMS",
     "LANDSCAPE_TYPE_PARAMS",
+    "PRECIPITATION_PARAMS",
+    "AMC_PARAMS"
 ]
 
 @dataclass(frozen=True)
@@ -167,5 +171,102 @@ LANDSCAPE_TYPE_PARAMS: dict[str, LandscapeTypeParams] = {
         ),
         weights=(0.30, 0.45, 0.15, 0.07, 0.03),
         label="South Hemisphere",
+    ),
+}
+
+@dataclass(frozen=True)
+class StratiformParams:
+    sigmoid_k: float
+    sigmoid_midpoint: float
+    gamma_shape: float
+    gamma_scale: float
+    wet_floor_mm: float
+    label: str
+
+@dataclass(frozen=True)
+class ConvectiveParams:
+    activation_temp: float
+    sigmoid_k: float
+    sigmoid_midpoint: float
+    gamma_shape: float
+    gamma_scale: float
+    wet_floor_mm: float
+    label: str
+
+@dataclass(frozen=True)
+class PrecipitationParams:
+    stratiform: StratiformParams
+    convective: ConvectiveParams
+    daily_cap_mm: float
+    label: str
+
+
+@dataclass(frozen=True)
+class AMCParams:
+    k_amc: float
+    r5_mid_dormant: float
+    r5_mid_growing: float
+    lag_days: int
+    label: str
+
+PRECIPITATION_PARAMS: dict[str, PrecipitationParams] = {
+    "north": PrecipitationParams(
+        stratiform=StratiformParams(
+            sigmoid_k=0.20,
+            sigmoid_midpoint=11.35,
+            gamma_shape=0.80,
+            gamma_scale=8.0,
+            wet_floor_mm=0.1,
+            label="North Stratiform",
+        ),
+        convective=ConvectiveParams(
+            activation_temp=25.0,
+            sigmoid_k=-0.30,
+            sigmoid_midpoint=28.0,
+            gamma_shape=1.50,
+            gamma_scale=18.0,
+            wet_floor_mm=2.0,
+            label="North Convective",
+        ),
+        daily_cap_mm=150.0,
+        label="North Hemisphere",
+    ),
+    "south": PrecipitationParams(
+        stratiform=StratiformParams(
+            sigmoid_k=0.39,
+            sigmoid_midpoint=11.33,
+            gamma_shape=0.65,
+            gamma_scale=10.0,
+            wet_floor_mm=0.1,
+            label="South Stratiform",
+        ),
+        convective=ConvectiveParams(
+            activation_temp=20.0,
+            sigmoid_k=-0.35,
+            sigmoid_midpoint=23.0,
+            gamma_shape=1.20,
+            gamma_scale=15.0,
+            wet_floor_mm=1.5,
+            label="South Convective",
+        ),
+        daily_cap_mm=150.0,
+        label="South Hemisphere",
+    ),
+}
+
+AMC_PARAMS: dict[str, AMCParams] = {
+    "north": AMCParams(
+        k_amc=0.12,
+        r5_mid_dormant=35.0,
+        r5_mid_growing=25.0,
+        lag_days=5,
+        label="North AMC",
+    ),
+    "south": AMCParams(
+        k_amc=0.10,
+        r5_mid_dormant=30.0,
+        r5_mid_growing=20.0,
+        lag_days=5,
+        label="South AMC",
     ),
 }

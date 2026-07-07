@@ -5,6 +5,7 @@ import logging
 import polars as pl
 import global_init  # global initialization
 from sims.environment import EnvironmentalSimulator
+from sims.precipitation import PrecipitationSimulator
 
 # logging config
 logging.basicConfig(
@@ -40,6 +41,10 @@ def run() -> None:
         temporal_index=global_config.temporal_index,
         rng=global_config.rng
     )
+    precipitation_sim = PrecipitationSimulator(
+        temporal_index=global_config.temporal_index,
+        rng=global_config.rng
+    )
 
     # 3. generate temporal framework
     north_temporal_framework = env_sim.generate_temporal_framework(
@@ -68,6 +73,25 @@ def run() -> None:
 
     north_temp_df.write_csv(data_dir / "north_temp.csv")
     south_temp_df.write_csv(data_dir / "south_temp.csv")
+
+    # 5. generate precipitation features
+    north_precipitation_features = precipitation_sim.generate_features(
+        daily_temp=north_daily_max_temp["daily_max_temp_celsius"],
+        season_label=north_temporal_framework["season_label"],
+        hemisphere="north"
+    )
+    south_precipitation_features = precipitation_sim.generate_features(
+        daily_temp=south_daily_max_temp["daily_max_temp_celsius"],
+        season_label=south_temporal_framework["season_label"],
+        hemisphere="south"
+    )
+
+    north_precipitation_df = pl.DataFrame(north_precipitation_features)
+    south_precipitation_df = pl.DataFrame(south_precipitation_features)
+
+    north_precipitation_df.write_csv(data_dir / "north_precipitation.csv")
+    south_precipitation_df.write_csv(data_dir / "south_precipitation.csv")
+    
 
 if __name__ == "__main__":
     run()
