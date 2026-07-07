@@ -93,28 +93,28 @@ class HemisphereTemperatureParams:
 HEMISPHERE_TEMPERATURE_PARAMS: dict[str, HemisphereTemperatureParams] = {
     "north": HemisphereTemperatureParams(
         label="North Hemisphere",
-        annual_mean=15.2,
-        amplitude=7.15,
+        annual_mean=16.0,
+        amplitude=11.5,
         phase_shift=30,
         physical_bounds=(7.0, 35.0),
-        anomaly_bounds=(-6.0, 6.0),
+        anomaly_bounds=(-8.0, 8.0),
         ou_theta=0.25,
-        ou_sigma=0.88,
+        ou_sigma=2.5,
         baseline_temp=18.0,
-        climate_sigma=0.3,
+        climate_sigma=1.2,
         climate_rho=0.45
     ),
     "south": HemisphereTemperatureParams(
         label="South Hemisphere",
-        annual_mean=13.3,
-        amplitude=3.65,
+        annual_mean=15.0,
+        amplitude=5.5,
         phase_shift=40,
         physical_bounds=(9.0, 25.0),
-        anomaly_bounds=(-3.0, 3.0),
+        anomaly_bounds=(-5.0, 5.0),
         ou_theta=0.25,
-        ou_sigma=0.71,
+        ou_sigma=1.8,
         baseline_temp=14.5,
-        climate_sigma=0.125,
+        climate_sigma=0.8,
         climate_rho=0.5
     )
 }

@@ -106,16 +106,21 @@ class EnvironmentalSimulator:
         temp_anomaly = np.empty(n, dtype=np.float32)
         daily_max_temp = np.empty(n, dtype=np.float32)
         excess = np.empty(n, dtype=np.float32)
+        raw_temp = np.empty(n, dtype=np.float32)
         
-        # Removed hard clip on anomaly to allow natural Gaussian tails
-        np.copyto(temp_anomaly, ou_noise)
-        np.add(base_curve, temp_anomaly, out=daily_max_temp)
+        # 1. Combine base + OU noise + extreme events to get the true raw physical temperature
+        np.add(base_curve, ou_noise, out=raw_temp)
+        np.add(raw_temp, extreme_events, out=raw_temp)
         
-        # Add extreme events AFTER base calculation so they break through normal bounds
-        np.add(daily_max_temp, extreme_events, out=daily_max_temp)
+        # 2. Calculate Anomaly strictly BEFORE physical clipping (Satisfies INV-023)
+        # This ensures the anomaly captures the extreme event, preventing "Ghost Heat" decoupling.
+        np.subtract(raw_temp, base_curve, out=temp_anomaly)
+        np.clip(temp_anomaly, params.anomaly_bounds[0], params.anomaly_bounds[1], out=temp_anomaly)
         
-        np.clip(daily_max_temp, params.physical_bounds[0], params.physical_bounds[1], out=daily_max_temp)
-        
+        # 3. Apply physical hard bounds to the final daily max temperature
+        np.clip(raw_temp, params.physical_bounds[0], params.physical_bounds[1], out=daily_max_temp)
+
+        # 4. Calculate daily excess heat for CHI
         np.subtract(daily_max_temp, params.baseline_temp, out=excess)
         np.maximum(excess, 0.0, out=excess)
         
