@@ -8,6 +8,7 @@ __all__= [
     "HemisphereTemperatureParams",
     "PrecipitationParams",
     "AMCParams",
+    "RunoffParams",
     "HEMISPHERE_TEMPERATURE_PARAMS",
     "SEASON_BOUNDARIES_NORTH",
     "SOUTH_PHASE_SHIFT",
@@ -15,7 +16,8 @@ __all__= [
     "APPLIANCE_EFFICIENCY_PARAMS",
     "LANDSCAPE_TYPE_PARAMS",
     "PRECIPITATION_PARAMS",
-    "AMC_PARAMS"
+    "AMC_PARAMS",
+    "RUNOFF_PARAMS"
 ]
 
 @dataclass(frozen=True)
@@ -268,5 +270,90 @@ AMC_PARAMS: dict[str, AMCParams] = {
         r5_mid_growing=20.0,
         lag_days=5,
         label="South AMC",
+    ),
+}
+
+
+# ─── Domain 4: Urban Runoff & Pollutant Loading Parameters ─────────────
+
+
+@dataclass(frozen=True)
+class RunoffParams:
+    label: str
+
+    # SCS Curve Number parameters
+    cn_i: float       # Curve Number for dry conditions (AMC-I)
+    cn_iii: float     # Curve Number for wet conditions (AMC-III)
+    catchment_area_ha: float  # Catchment area in hectares
+
+    # TSS composite function parameters
+    tss_lognormal_median: float  # Median of LogNormal base EMC (mg/L)
+    tss_lognormal_sigma: float   # Sigma of LogNormal distribution
+    first_flush_coeff: float     # Buildup coefficient per dry day
+    first_flush_cdd_cap: int     # Maximum effective dry days for buildup
+    depletion_lambda: float      # Exponential decay rate per mm CSR
+
+    # Velocity scour override (PHYS-05 resolution)
+    scour_rainfall_threshold_mm: float  # Rainfall threshold for scour (mm)
+    scour_dd_floor: float               # Minimum DD_eff during scour events
+
+    # Nutrient load parameters
+    n_emc_median: float   # Median nitrogen EMC (mg/L)
+    n_emc_sigma: float    # Sigma for nitrogen LogNormal
+    p_emc_median: float   # Median phosphorus EMC (mg/L)
+    p_emc_sigma: float    # Sigma for phosphorus LogNormal
+    n_ref_kg: float       # Reference nitrogen load (kg) for normalization
+    p_ref_kg: float       # Reference phosphorus load (kg) for normalization
+    baseline_temp: float  # Temperature baseline for nutrient modulation (°C)
+
+
+RUNOFF_PARAMS: dict[str, RunoffParams] = {
+    "north": RunoffParams(
+        label="North Hemisphere",
+        # SCS-CN: Urban residential, ~65% impervious
+        cn_i=61.0,
+        cn_iii=91.0,
+        catchment_area_ha=55.0,   # 55 hectares (§1 Architectural Decisions)
+        # TSS: NSQD mixed-use urban
+        tss_lognormal_median=54.5,
+        tss_lognormal_sigma=0.75,
+        first_flush_coeff=0.15,
+        first_flush_cdd_cap=14,
+        depletion_lambda=0.008,
+        # Scour override (PHYS-05)
+        scour_rainfall_threshold_mm=50.0,
+        scour_dd_floor=0.40,
+        # Nutrient loading
+        n_emc_median=2.0,
+        n_emc_sigma=0.5,
+        p_emc_median=0.3,
+        p_emc_sigma=0.6,
+        n_ref_kg=1.5,
+        p_ref_kg=0.25,
+        baseline_temp=18.0,
+    ),
+    "south": RunoffParams(
+        label="South Hemisphere",
+        # SCS-CN: Urban residential, ~50% impervious
+        cn_i=55.0,
+        cn_iii=87.0,
+        catchment_area_ha=40.0,   # 40 hectares (§1 Architectural Decisions)
+        # TSS: slightly lower EMC for subtropical urban
+        tss_lognormal_median=54.5,
+        tss_lognormal_sigma=0.75,
+        first_flush_coeff=0.15,
+        first_flush_cdd_cap=14,
+        depletion_lambda=0.008,
+        # Scour override (PHYS-05)
+        scour_rainfall_threshold_mm=50.0,
+        scour_dd_floor=0.40,
+        # Nutrient loading (similar EMC, smaller reference loads)
+        n_emc_median=2.0,
+        n_emc_sigma=0.5,
+        p_emc_median=0.3,
+        p_emc_sigma=0.6,
+        n_ref_kg=1.2,
+        p_ref_kg=0.20,
+        baseline_temp=14.5,
     ),
 }

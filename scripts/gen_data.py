@@ -6,6 +6,7 @@ import polars as pl
 import global_init  # global initialization
 from sims.environment import EnvironmentalSimulator
 from sims.precipitation import PrecipitationSimulator
+from sims.runoff import RunoffSimulator
 
 # logging config
 logging.basicConfig(
@@ -42,6 +43,10 @@ def run() -> None:
         rng=global_config.rng
     )
     precipitation_sim = PrecipitationSimulator(
+        temporal_index=global_config.temporal_index,
+        rng=global_config.rng
+    )
+    runoff_sim = RunoffSimulator(
         temporal_index=global_config.temporal_index,
         rng=global_config.rng
     )
@@ -91,7 +96,32 @@ def run() -> None:
 
     north_precipitation_df.write_csv(data_dir / "north_precipitation.csv")
     south_precipitation_df.write_csv(data_dir / "south_precipitation.csv")
-    
+
+    # 6. generate runoff pollutant features
+    north_runoff_features = runoff_sim.generate_features(
+        daily_rainfall_mm=north_precipitation_features["daily_rainfall_mm"],
+        antecedent_moisture_condition=north_precipitation_features["antecedent_moisture_condition"],
+        consecutive_dry_days=north_precipitation_features["consecutive_dry_days"],
+        cumulative_storm_rainfall_mm=north_precipitation_features["cumulative_storm_rainfall_mm"],
+        daily_max_temp_celsius=north_daily_max_temp["daily_max_temp_celsius"],
+        temp_anomaly_celsius=north_daily_max_temp["temp_anomaly_celsius"],
+        hemisphere="north"
+    )
+    south_runoff_features = runoff_sim.generate_features(
+        daily_rainfall_mm=south_precipitation_features["daily_rainfall_mm"],
+        antecedent_moisture_condition=south_precipitation_features["antecedent_moisture_condition"],
+        consecutive_dry_days=south_precipitation_features["consecutive_dry_days"],
+        cumulative_storm_rainfall_mm=south_precipitation_features["cumulative_storm_rainfall_mm"],
+        daily_max_temp_celsius=south_daily_max_temp["daily_max_temp_celsius"],
+        temp_anomaly_celsius=south_daily_max_temp["temp_anomaly_celsius"],
+        hemisphere="south"
+    )
+
+    north_runoff_df = pl.DataFrame(north_runoff_features)
+    south_runoff_df = pl.DataFrame(south_runoff_features)
+
+    north_runoff_df.write_csv(data_dir / "north_runoff.csv")
+    south_runoff_df.write_csv(data_dir / "south_runoff.csv")
 
 if __name__ == "__main__":
     run()
