@@ -10,7 +10,7 @@ from params import (
     LANDSCAPE_TYPE_PARAMS
 )
 
-class HouseholdDemographicSimulator:
+class HouseholdSimulator:
     # generates occupancy_count arrays via Negative Binomial
     def __init__(self, global_config: GlobalInitializer) -> None:
         self._rng = global_config.rng
@@ -18,24 +18,24 @@ class HouseholdDemographicSimulator:
         self._simulation_days = global_config.simulation_days
         self._logger = logging.getLogger(__name__)
 
-    def generate_household_ids(self, population_size: int) -> np.ndarray:
+    def generate_household_ids(self) -> np.ndarray:
         # generates uuid v7
         self._logger.info(
             "Generating %d household UUIDs (v7)....",
-            population_size
+            self._population_size
         )
         # 1. generate uuids via iteration
         id_set: set[str] = set()
         id_list: list[str] = []
 
-        for _ in range(population_size):
+        for _ in range(self._population_size):
             new_id = str(uuid.uuid7())
             id_set.add(new_id)
             id_list.append(new_id)
 
         # 2. hash-set uniqueness assertion
-        assert len(id_set) == population_size, (
-            f"UUID Collision Detected: Generated {len(id_set)} unique IDs from {population_size} attempts."
+        assert len(id_set) == self._population_size, (
+            f"UUID Collision Detected: Generated {len(id_set)} unique IDs from {self._population_size} attempts."
         )
 
         result = np.array(id_list, dtype=object)
@@ -48,20 +48,19 @@ class HouseholdDemographicSimulator:
 
     def generate_occupancy_count(
         self,
-        population_size: int,
         hemisphere: Literal["north", "south"],    
     ) -> np.ndarray:
         params = OCCUPANCY_PARAMS[hemisphere]
         self._logger.info(
             "Generating Occupancy Count for %sern Hemisphere.\nParams: n=%.2f | r=%.2f | | μ'=%.2f | p=%.5f",
-            hemisphere, population_size, params.r, params.mu, params.p
+            hemisphere, self._population_size, params.r, params.mu, params.p
         )
 
         # 1. vectorized negative binomial draw (failures before r successes)
         rate = self._rng.gamma(
             shape=params.r,
             scale=(1.0 - params.p) / params.p,
-            size=population_size
+            size=self._population_size
         )
         raw_draws = self._rng.poisson(lam=rate)
 
@@ -84,7 +83,6 @@ class HouseholdDemographicSimulator:
     # generate hemispheric appliance efficiency score
     def generate_appliance_efficiency_score(
         self,
-        population_size: int,
         hemisphere: Literal["north", "south"]
     ) -> np.ndarray:
         params = APPLIANCE_EFFICIENCY_PARAMS[hemisphere]
@@ -98,7 +96,7 @@ class HouseholdDemographicSimulator:
         raw_scores = self._rng.beta(
             a=params.alpha,
             b=params.beta,
-            size=population_size
+            size=self._population_size
         )
 
         # 2. domain clamp
@@ -117,7 +115,6 @@ class HouseholdDemographicSimulator:
     # generate hemispheric landscape type
     def generate_landscape_type(
         self,
-        population_size: int,
         hemisphere: Literal["north", "south"]
     ) -> np.ndarray:
         # weighted categorical draw for landscape_type
@@ -132,7 +129,7 @@ class HouseholdDemographicSimulator:
         try:
             result = self._rng.choice(
                 a=np.array(params.categories, dtype=object),
-                size=population_size,
+                size=self._population_size,
                 replace=True,
                 p=params.weight_array
             )
@@ -144,14 +141,14 @@ class HouseholdDemographicSimulator:
                 e, params.fallback_category
             )
             result = np.full(
-                population_size,
+                self._population_size,
                 params.fallback_category,
                 dtype=object
             )
 
         self._logger.info(
             "Landscape Type Stats | unique=%d | mode='%s' | n=%d",
-            len(np.unique(result)), pl.Series(result).mode().item(0), population_size,
+            len(np.unique(result)), pl.Series(result).mode().item(0), self._population_size,
         )
 
         return result

@@ -16,7 +16,7 @@ class SimulationConfig:
     days_per_year: int = 365
     num_years: int = 5
     population_size: int = 100_000
-    subsample: int = 5_0000
+    subsample: int = 5_000
     random_seed: int = 2032
 
     def __post_init__(self) -> None:
@@ -76,7 +76,7 @@ class GlobalInitializer:
 
     # public attributes/properties
     @property
-    def config(self) -> SimulationConfig:
+    def sim_config(self) -> SimulationConfig:
         return self._config
 
     @property
