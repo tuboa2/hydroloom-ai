@@ -1,14 +1,15 @@
-# full data generation pipeline for the ul dataset
 from __future__ import annotations
-from pathlib import Path
 import logging
 import polars as pl
 import global_init  # global initialization
+from pathlib import Path
+from typing import Literal
 from sims.household import HouseholdSimulator
 from sims.environment import EnvironmentalSimulator
 from sims.precipitation import PrecipitationSimulator
 from sims.runoff import RunoffSimulator
 from sims.cluster import ClusterSimulator
+from sims.macro_behavior import MacroBehavioralSimulator
 
 # logging config
 logging.basicConfig(
@@ -30,7 +31,7 @@ service_b_models_dir = str(
     parent_dir / "services/behavior_clustering/models"
 )
 
-def run() -> None:
+def run(hemisphere: Literal["north", "south"]) -> None:
     # run the data gen pipeline
     logger.info("Data Generation Pipeline Execution Started")
 
@@ -69,124 +70,87 @@ def run() -> None:
         service_b_data_dir=service_b_data_dir,
         service_b_models_dir=service_b_models_dir 
     )
+    macro_sim = MacroBehavioralSimulator(
+        rng=global_config.rng,
+        n_days=global_config.simulation_days
+    )
 
     # 3. generate temporal framework
-    north_temporal_framework = env_sim.generate_temporal_framework(
+    temporal_framework = env_sim.generate_temporal_framework(
         config=global_config,
-        hemisphere="north"
-    )
-    south_temporal_framework = env_sim.generate_temporal_framework(
-        config=global_config,
-        hemisphere="south"
+        hemisphere=hemisphere
     )
 
     # 4. generate daily max temp
-    north_daily_max_temp = env_sim.generate_daily_max_temp(
-        day_index=north_temporal_framework["day_index"],
-        year_index=north_temporal_framework["year_index"],
-        hemisphere="north"
-    )
-    south_daily_max_temp = env_sim.generate_daily_max_temp(
-        day_index=south_temporal_framework["day_index"],
-        year_index=south_temporal_framework["year_index"],
-        hemisphere="south"
+    daily_max_temp = env_sim.generate_daily_max_temp(
+        day_index=temporal_framework["day_index"],
+        year_index=temporal_framework["year_index"],
+        hemisphere=hemisphere
     )
 
-    north_temp_df = pl.DataFrame(north_daily_max_temp)
-    south_temp_df = pl.DataFrame(south_daily_max_temp)
-
-    north_temp_df.write_csv(data_dir / "north_temp.csv")
-    south_temp_df.write_csv(data_dir / "south_temp.csv")
+    temp_df = pl.DataFrame(daily_max_temp) 
+    temp_df.write_csv(data_dir / f"{hemisphere}_temp.csv")
 
     # 5. generate precipitation features
-    north_precipitation_features = precipitation_sim.generate_features(
-        daily_temp=north_daily_max_temp["daily_max_temp_celsius"],
-        season_label=north_temporal_framework["season_label"],
-        hemisphere="north"
-    )
-    south_precipitation_features = precipitation_sim.generate_features(
-        daily_temp=south_daily_max_temp["daily_max_temp_celsius"],
-        season_label=south_temporal_framework["season_label"],
-        hemisphere="south"
+    precipitation_features = precipitation_sim.generate_features(
+        daily_temp=daily_max_temp["daily_max_temp_celsius"],
+        season_label=temporal_framework["season_label"],
+        hemisphere=hemisphere
     )
 
-    north_precipitation_df = pl.DataFrame(north_precipitation_features)
-    south_precipitation_df = pl.DataFrame(south_precipitation_features)
-
-    north_precipitation_df.write_csv(data_dir / "north_precipitation.csv")
-    south_precipitation_df.write_csv(data_dir / "south_precipitation.csv")
+    precipitation_df = pl.DataFrame(precipitation_features)
+    precipitation_df.write_csv(data_dir / f"{hemisphere}_precipitation.csv")
 
     # 6. generate runoff pollutant features
-    north_runoff_features = runoff_sim.generate_features(
-        daily_rainfall_mm=north_precipitation_features["daily_rainfall_mm"],
-        antecedent_moisture_condition=north_precipitation_features["antecedent_moisture_condition"],
-        consecutive_dry_days=north_precipitation_features["consecutive_dry_days"],
-        cumulative_storm_rainfall_mm=north_precipitation_features["cumulative_storm_rainfall_mm"],
-        daily_max_temp_celsius=north_daily_max_temp["daily_max_temp_celsius"],
-        temp_anomaly_celsius=north_daily_max_temp["temp_anomaly_celsius"],
-        hemisphere="north"
-    )
-    south_runoff_features = runoff_sim.generate_features(
-        daily_rainfall_mm=south_precipitation_features["daily_rainfall_mm"],
-        antecedent_moisture_condition=south_precipitation_features["antecedent_moisture_condition"],
-        consecutive_dry_days=south_precipitation_features["consecutive_dry_days"],
-        cumulative_storm_rainfall_mm=south_precipitation_features["cumulative_storm_rainfall_mm"],
-        daily_max_temp_celsius=south_daily_max_temp["daily_max_temp_celsius"],
-        temp_anomaly_celsius=south_daily_max_temp["temp_anomaly_celsius"],
-        hemisphere="south"
+    runoff_features = runoff_sim.generate_features(
+        daily_rainfall_mm=precipitation_features["daily_rainfall_mm"],
+        antecedent_moisture_condition=precipitation_features["antecedent_moisture_condition"],
+        consecutive_dry_days=precipitation_features["consecutive_dry_days"],
+        cumulative_storm_rainfall_mm=precipitation_features["cumulative_storm_rainfall_mm"],
+        daily_max_temp_celsius=daily_max_temp["daily_max_temp_celsius"],
+        temp_anomaly_celsius=daily_max_temp["temp_anomaly_celsius"],
+        hemisphere=hemisphere
     )
 
-    north_runoff_df = pl.DataFrame(north_runoff_features)
-    south_runoff_df = pl.DataFrame(south_runoff_features)
-
-    north_runoff_df.write_csv(data_dir / "north_runoff.csv")
-    south_runoff_df.write_csv(data_dir / "south_runoff.csv")
+    runoff_df = pl.DataFrame(runoff_features)
+    runoff_df.write_csv(data_dir / f"{hemisphere}_runoff.csv")
 
     # 7. generate household features
-    north_household_ids = household_sim.generate_household_ids()
-    north_occupancy_count = household_sim.generate_occupancy_count(hemisphere="north")
-    north_appliance_efficiency = household_sim.generate_appliance_efficiency_score(hemisphere="north")
-    north_landscape_type = household_sim.generate_landscape_type(hemisphere="north")
-    north_water_usage = household_sim.generate_daily_water_usage_liters(
-        occupancy_count=north_occupancy_count,
-        appliance_efficiency_score=north_appliance_efficiency,
-        landscape_type=north_landscape_type,
-        daily_max_temp_celsius=north_daily_max_temp["daily_max_temp_celsius"],
-        daily_rainfall_mm=north_precipitation_features["daily_rainfall_mm"],
-        hemisphere="north"
-    )
-    south_household_ids = household_sim.generate_household_ids()
-    south_occupancy_count = household_sim.generate_occupancy_count(hemisphere="south")
-    south_appliance_efficiency = household_sim.generate_appliance_efficiency_score(hemisphere="south")
-    south_landscape_type = household_sim.generate_landscape_type(hemisphere="south")
-    south_water_usage = household_sim.generate_daily_water_usage_liters(
-        occupancy_count=south_occupancy_count,
-        appliance_efficiency_score=south_appliance_efficiency,
-        landscape_type=south_landscape_type,
-        daily_max_temp_celsius=south_daily_max_temp["daily_max_temp_celsius"],
-        daily_rainfall_mm=south_precipitation_features["daily_rainfall_mm"],
-        hemisphere="south"
+    household_ids = household_sim.generate_household_ids()
+    occupancy_count = household_sim.generate_occupancy_count(hemisphere=hemisphere)
+    appliance_efficiency = household_sim.generate_appliance_efficiency_score(hemisphere=hemisphere)
+    landscape_type = household_sim.generate_landscape_type(hemisphere=hemisphere)
+    water_usage = household_sim.generate_daily_water_usage_liters(
+        occupancy_count=occupancy_count,
+        appliance_efficiency_score=appliance_efficiency,
+        landscape_type=landscape_type,
+        daily_max_temp_celsius=daily_max_temp["daily_max_temp_celsius"],
+        daily_rainfall_mm=precipitation_features["daily_rainfall_mm"],
+        hemisphere=hemisphere
     )
 
     # 8. generate cluster daily means feature
-    north_cluster = cluster_sim.generate_features(
-        water_usage_matrix=north_water_usage,
-        hemisphere="north",
-        daily_rainfall_mm=north_precipitation_features["daily_rainfall_mm"],
-        consecutive_dry_days=north_precipitation_features["consecutive_dry_days"]
-    )
-    south_cluster = cluster_sim.generate_features(
-        water_usage_matrix=south_water_usage,
-        hemisphere="south",
-        daily_rainfall_mm=south_precipitation_features["daily_rainfall_mm"],
-        consecutive_dry_days=south_precipitation_features["consecutive_dry_days"]
+    cluster = cluster_sim.generate_features(
+        water_usage_matrix=water_usage,
+        hemisphere=hemisphere,
+        daily_rainfall_mm=precipitation_features["daily_rainfall_mm"],
+        consecutive_dry_days=precipitation_features["consecutive_dry_days"]
     )
 
-    north_cluster_df = pl.DataFrame(north_cluster)
-    south_cluster_df = pl.DataFrame(south_cluster)
+    cluster_df = pl.DataFrame(cluster)
+    cluster_df.write_csv(data_dir / f"{hemisphere}_cluster.csv")
 
-    north_cluster_df.write_csv(data_dir / "north_cluster.csv")
-    south_cluster_df.write_csv(data_dir / "south_cluster.csv")
+    # 9. generate macro behavioral features
+    macro = macro_sim.generate_features(
+        day_index=temporal_framework["day_index"],
+        season_label=temporal_framework["season_label"],
+        consecutive_dry_days=precipitation_features["consecutive_dry_days"],
+        cluster_means_dict=cluster
+    )
+
+    macro_df = pl.DataFrame(macro)
+    macro_df.write_csv(data_dir / f"{hemisphere}_macro.csv")
 
 if __name__ == "__main__":
-    run()
+    run(hemisphere="north")
+    run(hemisphere="south")

@@ -357,3 +357,22 @@ RUNOFF_PARAMS: dict[str, RunoffParams] = {
         baseline_temp=14.5,
     ),
 }
+
+@dataclass(frozen=True)
+class MacroBehaviorParams:
+    # 7.1 Ban Constants
+    ban_cdd_trigger: int = 10
+    ban_duration_min: int = 7
+    ban_duration_max: int = 21
+    ban_compliance_outdoor: float = 0.60
+    ban_compliance_base: float = 0.90
+    
+    # 7.2 Holiday Constants
+    holiday_multiplier: float = 1.25
+    annual_holidays: tuple[int, ...] = (1, 90, 150, 185, 330, 359)
+    
+    # 7.3 Pricing Constants
+    pricing_lag_days: int = 3
+    pricing_tier_1_multiplier: float = 0.95
+    pricing_tier_2_multiplier: float = 0.85
+
