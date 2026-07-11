@@ -4,12 +4,14 @@ import polars as pl
 import global_init  # global initialization
 from pathlib import Path
 from typing import Literal
+from params import HEMISPHERE_TEMPERATURE_PARAMS
 from sims.household import HouseholdSimulator
 from sims.environment import EnvironmentalSimulator
 from sims.precipitation import PrecipitationSimulator
 from sims.runoff import RunoffSimulator
 from sims.cluster import ClusterSimulator
 from sims.macro_behavior import MacroBehavioralSimulator
+from sims.interactions import InteractionSimulator
 
 # logging config
 logging.basicConfig(
@@ -74,6 +76,7 @@ def run(hemisphere: Literal["north", "south"]) -> None:
         rng=global_config.rng,
         n_days=global_config.simulation_days
     )
+    interaction_sim = InteractionSimulator()
 
     # 3. generate temporal framework
     temporal_framework = env_sim.generate_temporal_framework(
@@ -150,6 +153,19 @@ def run(hemisphere: Literal["north", "south"]) -> None:
 
     macro_df = pl.DataFrame(macro)
     macro_df.write_csv(data_dir / f"{hemisphere}_macro.csv")
+
+    # 10. generate interaction features
+    interactions = interaction_sim.generate_features(
+        consecutive_dry_days=precipitation_features["consecutive_dry_days"],
+        daily_max_temp_celsius=daily_max_temp["daily_max_temp_celsius"],
+        cluster_standard_consumers_daily_mean=cluster["cluster_standard_consumers_daily_mean_liters"],
+        daily_runoff_volume_m3=runoff_features["daily_runoff_volume_m3"],
+        hemisphere=hemisphere,
+        baseline_temp=HEMISPHERE_TEMPERATURE_PARAMS[hemisphere].baseline_temp
+    )
+
+    interactions_df = pl.DataFrame(interactions)
+    interactions_df.write_csv(data_dir / f"{hemisphere}_interactions.csv")
 
 if __name__ == "__main__":
     run(hemisphere="north")
