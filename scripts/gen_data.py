@@ -12,6 +12,7 @@ from sims.runoff import RunoffSimulator
 from sims.cluster import ClusterSimulator
 from sims.macro_behavior import MacroBehavioralSimulator
 from sims.interactions import InteractionSimulator
+from sims.wqi import WQISimulator
 
 # logging config
 logging.basicConfig(
@@ -32,6 +33,9 @@ service_b_data_dir = str(
 service_b_models_dir = str(
     parent_dir / "services/behavior_clustering/models"
 )
+
+processed_dir = parent_dir / "data/processed"
+processed_dir.mkdir(parents=True, exist_ok=True)
 
 def run(hemisphere: Literal["north", "south"]) -> None:
     # run the data gen pipeline
@@ -77,6 +81,9 @@ def run(hemisphere: Literal["north", "south"]) -> None:
         n_days=global_config.simulation_days
     )
     interaction_sim = InteractionSimulator()
+    wqi_sim = WQISimulator(
+        rng=global_config.rng,
+    )
 
     # 3. generate temporal framework
     temporal_framework = env_sim.generate_temporal_framework(
@@ -166,6 +173,65 @@ def run(hemisphere: Literal["north", "south"]) -> None:
 
     interactions_df = pl.DataFrame(interactions)
     interactions_df.write_csv(data_dir / f"{hemisphere}_interactions.csv")
+
+    # 11. generate target variable
+    wqi_features = wqi_sim.generate_target(
+        daily_max_temp_celsius=daily_max_temp["daily_max_temp_celsius"],
+        daily_rainfall_mm=precipitation_features["daily_rainfall_mm"],
+        total_suspended_solids_mg_L=runoff_features["total_suspended_solids_mg_L"],
+        daily_runoff_volume_m3=runoff_features["daily_runoff_volume_m3"],
+        nutrient_load_index=runoff_features["nutrient_load_index"],
+        heat_x_nutrient_synergy=runoff_features["heat_x_nutrient_synergy"],
+        consecutive_dry_days=precipitation_features["consecutive_dry_days"],
+        cluster_heavy_users_mean=cluster["cluster_heavy_users_daily_mean_liters"]
+    )
+
+    wqi_df = pl.DataFrame(wqi_features)
+    wqi_df.write_csv(data_dir / f"{hemisphere}_wqi.csv")
+
+    logger.info("Assembling final Parquet dataset and verifying invariants...")
+        
+    # Assemble raw dict
+    final_data = {
+        "hemisphere": [hemisphere] * global_config.simulation_days,
+        "day_index": temporal_framework["day_index"],
+        "year_index": temporal_framework["year_index"],
+        "is_weekend": temporal_framework["is_weekend"],
+        "season_label": temporal_framework["season_label"],
+        "daily_max_temp_celsius": daily_max_temp["daily_max_temp_celsius"],
+        "temp_anomaly_celsius": daily_max_temp["temp_anomaly_celsius"],
+        "cumulative_heat_index": daily_max_temp["cumulative_heat_index"],
+        "daily_rainfall_mm": precipitation_features["daily_rainfall_mm"],
+        "consecutive_dry_days": precipitation_features["consecutive_dry_days"],
+        "rolling_7d_rainfall_mm": precipitation_features["rolling_7d_rainfall_mm"],
+        "cumulative_storm_rainfall_mm": precipitation_features["cumulative_storm_rainfall_mm"],
+        "antecedent_moisture_condition": precipitation_features["antecedent_moisture_condition"],
+        "daily_runoff_volume_m3": runoff_features["daily_runoff_volume_m3"],
+        "total_suspended_solids_mg_L": runoff_features["total_suspended_solids_mg_L"],
+        "nutrient_load_index": runoff_features["nutrient_load_index"],
+        "heat_x_nutrient_synergy": runoff_features["heat_x_nutrient_synergy"],
+        "cluster_heavy_users_daily_mean_liters": cluster["cluster_heavy_users_daily_mean_liters"],
+        "cluster_conservationists_daily_mean_liters": cluster["cluster_conservationists_daily_mean_liters"],
+        "cluster_outdoor_landscape_daily_mean_liters": cluster["cluster_outdoor_landscape_daily_mean_liters"],
+        "cluster_standard_consumers_daily_mean_liters": cluster["cluster_standard_consumers_daily_mean_liters"],
+        "watering_ban_active": macro["watering_ban_active"],
+        "holiday_weekend_flag": macro["holiday_weekend_flag"],
+        "tiered_pricing_regime": macro["tiered_pricing_regime"],
+        "drought_x_heat_stress": interactions["drought_x_heat_stress"],
+        "demand_x_runoff_pressure": interactions["demand_x_runoff_pressure"],
+        "water_quality_index": wqi_features["water_quality_index"],
+    }
+    
+    final_df = pl.DataFrame(final_data)
+    
+    assert "latent_groundwater" not in final_df.columns, "FATAL: Latent leakage!"
+    assert "latent_industrial" not in final_df.columns, "FATAL: Latent leakage!"
+    
+    assert len(final_df.columns) == 27, f"FATAL: Expected 27 columns, got {len(final_df.columns)}"
+    assert len(final_df) == 1825, "FATAL: Expected exactly 1825 rows per hemisphere!"
+    
+    final_df.write_parquet(processed_dir / f"{hemisphere}_raw.parquet")
+    logger.info(f"Successfully saved Service A Dataset to: {processed_dir}")
 
 if __name__ == "__main__":
     run(hemisphere="north")

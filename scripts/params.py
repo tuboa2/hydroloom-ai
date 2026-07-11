@@ -376,3 +376,9 @@ class MacroBehaviorParams:
     pricing_tier_1_multiplier: float = 0.95
     pricing_tier_2_multiplier: float = 0.85
 
+class WQIParams:
+    wqi_base: float = 85.0
+    demand_threshold: float = 1000.0
+    recovery_volume_divisor: float = 50.0
+    scour_rainfall_threshold_mm: float = 50.0
+    scour_dd_floor: float = 0.40
