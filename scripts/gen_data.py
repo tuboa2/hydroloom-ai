@@ -1,7 +1,7 @@
 from __future__ import annotations
 import logging
+import global_init
 import polars as pl
-import global_init  # global initialization
 from pathlib import Path
 from typing import Literal
 from params import HEMISPHERE_TEMPERATURE_PARAMS
@@ -98,18 +98,12 @@ def run(hemisphere: Literal["north", "south"]) -> None:
         hemisphere=hemisphere
     )
 
-    temp_df = pl.DataFrame(daily_max_temp) 
-    temp_df.write_csv(data_dir / f"{hemisphere}_temp.csv")
-
     # 5. generate precipitation features
     precipitation_features = precipitation_sim.generate_features(
         daily_temp=daily_max_temp["daily_max_temp_celsius"],
         season_label=temporal_framework["season_label"],
         hemisphere=hemisphere
     )
-
-    precipitation_df = pl.DataFrame(precipitation_features)
-    precipitation_df.write_csv(data_dir / f"{hemisphere}_precipitation.csv")
 
     # 6. generate runoff pollutant features
     runoff_features = runoff_sim.generate_features(
@@ -122,11 +116,7 @@ def run(hemisphere: Literal["north", "south"]) -> None:
         hemisphere=hemisphere
     )
 
-    runoff_df = pl.DataFrame(runoff_features)
-    runoff_df.write_csv(data_dir / f"{hemisphere}_runoff.csv")
-
     # 7. generate household features
-    household_ids = household_sim.generate_household_ids()
     occupancy_count = household_sim.generate_occupancy_count(hemisphere=hemisphere)
     appliance_efficiency = household_sim.generate_appliance_efficiency_score(hemisphere=hemisphere)
     landscape_type = household_sim.generate_landscape_type(hemisphere=hemisphere)
@@ -147,9 +137,6 @@ def run(hemisphere: Literal["north", "south"]) -> None:
         consecutive_dry_days=precipitation_features["consecutive_dry_days"]
     )
 
-    cluster_df = pl.DataFrame(cluster)
-    cluster_df.write_csv(data_dir / f"{hemisphere}_cluster.csv")
-
     # 9. generate macro behavioral features
     macro = macro_sim.generate_features(
         day_index=temporal_framework["day_index"],
@@ -157,9 +144,6 @@ def run(hemisphere: Literal["north", "south"]) -> None:
         consecutive_dry_days=precipitation_features["consecutive_dry_days"],
         cluster_means_dict=cluster
     )
-
-    macro_df = pl.DataFrame(macro)
-    macro_df.write_csv(data_dir / f"{hemisphere}_macro.csv")
 
     # 10. generate interaction features
     interactions = interaction_sim.generate_features(
@@ -170,9 +154,6 @@ def run(hemisphere: Literal["north", "south"]) -> None:
         hemisphere=hemisphere,
         baseline_temp=HEMISPHERE_TEMPERATURE_PARAMS[hemisphere].baseline_temp
     )
-
-    interactions_df = pl.DataFrame(interactions)
-    interactions_df.write_csv(data_dir / f"{hemisphere}_interactions.csv")
 
     # 11. generate target variable
     wqi_features = wqi_sim.generate_target(
@@ -185,9 +166,6 @@ def run(hemisphere: Literal["north", "south"]) -> None:
         consecutive_dry_days=precipitation_features["consecutive_dry_days"],
         cluster_heavy_users_mean=cluster["cluster_heavy_users_daily_mean_liters"]
     )
-
-    wqi_df = pl.DataFrame(wqi_features)
-    wqi_df.write_csv(data_dir / f"{hemisphere}_wqi.csv")
 
     logger.info("Assembling final Parquet dataset and verifying invariants...")
         
