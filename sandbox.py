@@ -1,10 +1,10 @@
-import os
 import sys
 import time
 import polars as pl
-from sklearn.cluster import KMeans
 import warnings
 import numpy as np
+from huggingface_hub import hf_hub_download
+import joblib
 
 warnings.filterwarnings("ignore")
 
@@ -67,7 +67,7 @@ def main():
     print_slow(
         f"{CYAN}=================================================={RESET}", 0.002
     )
-    print_slow(f"{YELLOW}Loading datasets and training KMeans model...{RESET}")
+    print_slow(f"{YELLOW}Loading datasets and pulling KMeans models from HuggingFace...{RESET}")
 
     try:
         north_df = pl.read_parquet("data/processed/north_final.parquet")
@@ -76,17 +76,29 @@ def main():
         print_slow(f"{RED}Error loading data: {e}{RESET}")
         return
 
-    # Train models
-    kmeans_north = KMeans(n_clusters=4, random_state=2033, n_init="auto")
-    kmeans_north.fit(north_df.to_numpy().astype(np.float64))
-    kmeans_north_labels = get_cluster_labels(kmeans_north)
-
-    kmeans_south = KMeans(n_clusters=4, random_state=2033, n_init="auto")
-    kmeans_south.fit(south_df.to_numpy().astype(np.float64))
-    kmeans_south_labels = get_cluster_labels(kmeans_south)
+    # Pull models from HuggingFace Hub
+    try:
+        north_model_path = hf_hub_download(repo_id="tuboa2/hydroloom-ai", repo_type="space", filename="kmeans_north_k4.joblib")
+        south_model_path = hf_hub_download(repo_id="tuboa2/hydroloom-ai", repo_type="space", filename="kmeans_south_k4.joblib")
+        
+        kmeans_north = joblib.load(north_model_path)
+        kmeans_south = joblib.load(south_model_path)
+        
+        # Ensure cluster centers are float64 to avoid dtype mismatch in scikit-learn 1.9+
+        kmeans_north.cluster_centers_ = kmeans_north.cluster_centers_.astype(np.float64)
+        kmeans_south.cluster_centers_ = kmeans_south.cluster_centers_.astype(np.float64)
+        
+        kmeans_north_labels = get_cluster_labels(kmeans_north)
+        kmeans_south_labels = get_cluster_labels(kmeans_south)
+    except ImportError:
+        print_slow(f"{RED}Error: huggingface_hub is not installed. Please ensure you installed the requirements.{RESET}")
+        return
+    except Exception as e:
+        print_slow(f"{RED}Error loading models from HuggingFace: {e}{RESET}")
+        return
 
     print_slow(
-        f"{GREEN}Models trained successfully on North and South Hemisphere data!{RESET}"
+        f"{GREEN}Models loaded successfully from HuggingFace Hub!{RESET}"
     )
     print_slow(
         "Your goal: Play with the 4 behavioral features to see how the model reacts."
