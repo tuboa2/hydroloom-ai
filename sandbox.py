@@ -70,14 +70,17 @@ def main():
     print_slow(f"{YELLOW}Loading datasets and pulling KMeans models from HuggingFace...{RESET}")
 
     try:
-        north_df = pl.read_parquet("data/processed/north_final.parquet")
-        south_df = pl.read_parquet("data/processed/south_final.parquet")
-    except Exception as e:
-        print_slow(f"{RED}Error loading data: {e}{RESET}")
-        return
-
-    # Pull models from HuggingFace Hub
-    try:
+        from huggingface_hub import hf_hub_download
+        import joblib
+        
+        # Pull datasets from HuggingFace Hub
+        north_data_path = hf_hub_download(repo_id="tuboa2/hydroloom-ai", repo_type="space", filename="north_final.parquet")
+        south_data_path = hf_hub_download(repo_id="tuboa2/hydroloom-ai", repo_type="space", filename="south_final.parquet")
+        
+        north_df = pl.read_parquet(north_data_path)
+        south_df = pl.read_parquet(south_data_path)
+        
+        # Pull models from HuggingFace Hub
         north_model_path = hf_hub_download(repo_id="tuboa2/hydroloom-ai", repo_type="space", filename="kmeans_north_k4.joblib")
         south_model_path = hf_hub_download(repo_id="tuboa2/hydroloom-ai", repo_type="space", filename="kmeans_south_k4.joblib")
         
@@ -94,7 +97,7 @@ def main():
         print_slow(f"{RED}Error: huggingface_hub is not installed. Please ensure you installed the requirements.{RESET}")
         return
     except Exception as e:
-        print_slow(f"{RED}Error loading models from HuggingFace: {e}{RESET}")
+        print_slow(f"{RED}Error loading assets from HuggingFace: {e}{RESET}")
         return
 
     print_slow(
