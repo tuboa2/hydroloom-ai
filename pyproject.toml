@@ -1,0 +1,36 @@
+[project]
+name = "hydromind"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "faker>=40.22.0",
+    "matplotlib>=3.11.0",
+    "mlflow>=3.14.0",
+    "numba>=0.66.0",
+    "numpy>=2.4.6",
+    "pandas>=2.2.0,<3.0.0",
+    "polars>=1.41.2",
+    "pyarrow>=24.0.0",
+    "pytest>=9.1.1",
+    "scikit-learn>=1.9.0",
+    "scipy>=1.17.1",
+    "seaborn>=0.13.2",
+    "uuid-utils>=0.16.2",
+    "wandb>=0.28.1",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["services*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
