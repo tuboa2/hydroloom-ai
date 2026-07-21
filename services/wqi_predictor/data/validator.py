@@ -1,62 +1,116 @@
-from dataclasses import dataclass
+from __future__ import annotations
+import re
+import numpy as np
 import polars as pl
-from scipy.stats import ks_2samp
+from .. import config
 
-@dataclass(frozen=True)
-class KSResult:
-    # dataclass to hold the result of a kolmogorov-smirnov test and basic stats
-    statistic: float
-    p_value: float
-    dist1_mean: float
-    dist1_std: float
-    dist2_mean: float
-    dist2_std: float
+class DataValidationError(ValueError):
+    # raised when a data governance, schema, or temporal integrity fails
+    pass
 
-def validate_drift(
-    train_df: pl.DataFrame,
-    val_df: pl.DataFrame,
-    test_df: pl.DataFrame
-) -> dict[str, KSResult]:
-    # verifies distributional drift accross the splits
-    target = "water_quality_index"
+def matches_any_pattern(column: str, patterns: tuple[str, ...]) -> bool:
+    return any(re.match(pattern, column) for pattern in patterns)
 
-    train_target = train_df[target].drop_nans()
-    val_target = val_df[target].drop_nans()
-    test_target = test_df[target].drop_nans()
-    
-    results = {}
-    
-    # train vs validation
-    stat, pval = ks_2samp(train_target, val_target)
-    results["train_vs_val"] = KSResult(
-        statistic=stat,
-        p_value=pval,
-        dist1_mean=train_target.mean(),
-        dist1_std=train_target.std(),
-        dist2_mean=val_target.mean(),
-        dist2_std=val_target.std(),
+def validate_schema(dataframe: pl.DataFrame, hemisphere: str) -> None:
+    missing = config.REQUIRED_COLUMNS.difference(dataframe.columns)
+    if missing:
+        raise DataValidationError(
+            f"{hemisphere}: missing required columns: {sorted(missing)}"
+        )
+        
+    unexpected = set(dataframe.columns) - set(config.REQUIRED_COLUMNS)
+    if not unexpected:
+        return
+        
+    future_leakage = {
+        column
+        for column in unexpected
+        if matches_any_pattern(column, config.FORBIDDEN_RAISE_PATTERNS)
+    }
+    if future_leakage:
+        raise DataValidationError(
+            f"{hemisphere}: forbidden future-leakage columns detected:"
+            f"{sorted(future_leakage)}"
+        )
+
+    droppable = {
+        column
+        for column in unexpected
+        if matches_any_pattern(column, config.FORBIDDEN_DROP_PATTERNS)
+    }
+
+    unknown = unexpected - future_leakage - droppable
+
+    if unknown:
+        raise DataValidationError(
+            f"{hemisphere}: unexpected unknown columns detected: {sorted(unknown)}"
+        )
+
+def validate_no_nulls(dataframe: pl.DataFrame) -> None:
+    null_counts = dataframe.null_count().to_dicts()[0]
+    columns_with_nulls = {
+        col: count for col, count in null_counts.items() if count > 0
+    }
+    if columns_with_nulls:
+        raise DataValidationError(
+            f"Null values detected: {columns_with_nulls}"
+        )
+
+def validate_hemisphere_constant(dataframe: pl.DataFrame, hemisphere: str) -> None:
+    values = (
+        dataframe[config.HEMISPHERE_COLUMN]
+        .cast(pl.String)
+        .str.to_lowercase()
+        .unique()
     )
+    if len(values) != 1 or values[0] != hemisphere.lower():
+        raise DataValidationError(
+            f"Hemisphere column must contain only '{hemisphere}'. Found: {values}"
+        )
 
-    # train vs test
-    stat, pval = ks_2samp(train_target, test_target)
-    results["train_vs_test"] = KSResult(
-        statistic=stat,
-        p_value=pval,
-        dist1_mean=train_target.mean(),
-        dist1_std=train_target.std(),
-        dist2_mean=test_target.mean(),
-        dist2_std=test_target.std(),
-    )
+def validate_temporal_index(dataframe: pl.DataFrame) -> None:
+    day_index = dataframe[config.DAY_INDEX_COLUMN]
+    if not day_index.dtype.is_integer():
+        raise DataValidationError("day_index must be an integer dtype.")
+    if not day_index.is_unique:
+        raise DataValidationError("day_index contains duplicate values.")
+    if not day_index.is_sorted():
+        raise DataValidationError("day_index is not monotonically increasing")
 
-    # validation vs test
-    stat, pval = ks_2samp(val_target, test_target)
-    results["val_vs_test"] = KSResult(
-        statistic=stat,
-        p_value=pval,
-        dist1_mean=val_target.mean(),
-        dist1_std=val_target.std(),
-        dist2_mean=test_target.mean(),
-        dist2_std=test_target.std(),
-    )
+    expected_days = np.arange(config.EXPECTED_ROW_COUNT, dtype=day_index.dtype.to_python())
+    if not np.array_equal(day_index.to_numpy(), expected_days):
+        raise DataValidationError(
+            "day_index must be exactly 0 through 1824 in ascending order."
+        )
 
-    return results
+    year_index = dataframe[config.YEAR_INDEX_COLUMN]
+    if not year_index.dtype.is_integer():
+        raise DataValidationError("year_index must be an integer dtype.")
+
+    unique_years = set(year_index.unique().cast(int))
+    expected_years = set(range(config.EXPECTED_YEAR_COUNT))
+    if unique_years != expected_years:
+        raise DataValidationError(
+            f"year_index must contain exactly {sorted(expected_years)}."
+            f"Found: {sorted(unique_years)}"
+        )
+
+    year_counts = year_index.value_counts().sort(config.YEAR_INDEX_COLUMN)
+    if not (year_counts["count"] == config.DAYS_PER_YEAR).all():
+        raise DataValidationError(
+            "Each year_index must contain exactly 365 daily observations."
+            f"Found counts: {year_counts.to_dict()}"
+        )
+
+def validate_target(dataframe: pl.DataFrame) -> None:
+    target = dataframe[config.TARGET_COLUMN]
+    if not target.dtype.is_numeric:
+        raise DataValidationError("water_quality_index must be numeric.")
+    if not np.isfinite(target).all():
+        raise DataValidationError("water_quality_index contains non-finite values.")
+    if (target < 0).any() or (target > 100).any():
+        raise DataValidationError(
+            "water_quality_index must be within the valid range of [0, 100]."
+        )
+
+# TODO: Split Integrity Validation
