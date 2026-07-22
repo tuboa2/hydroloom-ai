@@ -113,4 +113,77 @@ def validate_target(dataframe: pl.DataFrame) -> None:
             "water_quality_index must be within the valid range of [0, 100]."
         )
 
-# TODO: Split Integrity Validation
+def validate_split_integrity(
+    train_days: pl.Series,
+    validation_days: pl.Series,
+    test_days: pl.Series
+) -> None:
+    expected_train_rows = config.DAYS_PER_YEAR * len(config.TRAIN_YEARS)
+    expected_validation_rows = config.DAYS_PER_YEAR
+    expected_test_rows = config.DAYS_PER_YEAR
+
+    if len(train_days) != expected_train_rows:
+        raise DataValidationError(
+            f"Train split must contain {expected_train_rows} rows."
+            f"Found {len(train_days)}."
+        )
+
+    if len(validation_days) != expected_validation_rows:
+        raise DataValidationError(
+            f"Validation split must contain {expected_validation_rows} rows."
+            f"Found {len(validation_days)}."
+        )
+
+    if len(test_days) != expected_test_rows:
+        raise DataValidationError(
+            f"Test split must contain {expected_test_rows} rows."
+            f"Found {len(test_days)}."
+        )
+
+    train_min_expected = 0
+    train_max_expected = expected_train_rows - 1
+
+    validation_min_expected = expected_train_rows
+    validation_max_expected = validation_min_expected + expected_validation_rows - 1
+
+    test_min_expected = validation_max_expected + 1
+    test_max_expected = test_min_expected + expected_test_rows - 1
+
+    if train_days.min() != train_min_expected or train_days.max() != train_max_expected:
+            raise DataValidationError(
+                f"Train day_index must span {train_min_expected} to {train_max_expected}. "
+                f"Found {train_days.min()} to {train_days.max()}."
+            )
+    
+    if (
+        validation_days.min() != validation_min_expected
+        or validation_days.max() != validation_max_expected
+    ):
+        raise DataValidationError(
+            f"Validation day_index must span {validation_min_expected} to "
+            f"{validation_max_expected}. "
+            f"Found {validation_days.min()} to {validation_days.max()}."
+        )
+
+    if test_days.min() != test_min_expected or test_days.max() != test_max_expected:
+        raise DataValidationError(
+            f"Test day_index must span {test_min_expected} to {test_max_expected}. "
+            f"Found {test_days.min()} to {test_days.max()}."
+        )
+
+    if train_days.max() >= validation_days.min():
+        raise DataValidationError("Train split overlaps validation split.")
+
+    if validation_days.max() >= test_days.min():
+        raise DataValidationError("Validation split overlaps test split.")
+
+    if not train_days.is_sorted():
+        raise DataValidationError("Train day_index is not monotonically increasing.")
+
+    if not validation_days.is_sorted():
+        raise DataValidationError(
+            "Validation day_index is not monotonically increasing."
+        )
+
+    if not test_days.is_sorted():
+        raise DataValidationError("Test day_index is not monotonically increasing.")
