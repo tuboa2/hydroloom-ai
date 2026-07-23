@@ -60,7 +60,7 @@ def _target_metadata(target: pl.Series) -> dict[str, Any]:
     } 
 
 def load_hemisphere(
-    hemisphere: Literal["north", "south"], 
+    hemisphere: str, 
     data_dir: Path | None = None
 ) -> IngestedHemisphere:
     resolved_data_dir = Path(data_dir or config.DATA_DIR)

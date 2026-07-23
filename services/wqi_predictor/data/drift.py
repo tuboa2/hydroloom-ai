@@ -1,6 +1,7 @@
 from __future__ import annotations
 import numpy as np
 import polars as pl
+import polars.selectors as cs
 from scipy.stats import ks_2samp
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import HistGradientBoostingClassifier
@@ -124,8 +125,154 @@ def compute_ks_metrics(
 
     return pl.DataFrame(records)
 
-# TODO: Compute PSI Metrics
-# TODO: Adverserial AUC
-# TODO: Compute Adverserial Validation
-# TODO: Preprocessing Pipeline Orchestrator
-# TODO: PyTest Verification
+def compute_psi_metrics(
+    train_df: pl.DataFrame,
+    val_df: pl.DataFrame,
+    test_df: pl.DataFrame,
+    columns: list[str],
+) -> pl.DataFrame:
+    comparisons = [
+        ("train_as_base_vs_validation", train_df, val_df),
+        ("train_as_base_vs_test", train_df, test_df),
+        ("validation_as_base_vs_test", val_df, test_df)
+    ]
+
+    records: list[dict[str, object]] = []
+
+    for column in columns:
+        is_numeric = train_df.schema[column].is_numeric()
+        for comparison_name, base_df, compare_df in comparisons:
+            if is_numeric:
+                psi = _psi_numeric(
+                    base_df[column],
+                    compare_df[column],
+                    config.PSI_BINS
+                )
+            else:
+                psi = _psi_categorical(base_df[column], compare_df[column])
+
+            records.append(
+                {
+                    "column": column,
+                    "comparison": comparison_name,
+                    "psi": psi,
+                    "psi_category": _psi_category(psi),
+                }
+            )
+
+    return pl.DataFrame(records)
+
+def _adversarial_auc(
+    base_features: pl.DataFrame,
+    compare_features: pl.DataFrame,
+    random_state: int
+) -> dict[str, float | int]:
+    x = pl.concat([base_features, compare_features])
+    y = np.concatenate(
+        [
+            np.zeros(len(base_features), dtype=int),
+            np.ones(len(compare_features), dtype=int)
+        ]
+    )
+
+    if x.is_empty() or len(np.unique(y)) < 2:
+        return {
+            "auc_mean": np.nan,
+            "auc_std": np.nan,
+            "n_base": int(len(base_features)),
+            "n_compare": int(len(compare_features))
+        }
+
+    numeric_features = x.select(cs.numeric()).columns
+    categorical_features = x.select(cs.categorical()).columns
+
+    if not numeric_features and not categorical_features:
+        return {
+            "auc_mean": np.nan,
+            "auc_std": np.nan,
+            "n_base": int(len(base_features)),
+            "n_compare": int(len(compare_features)),
+        }
+
+    transformers = []
+
+    if numeric_features:
+        transformers.append(
+            (
+                "numeric",
+                SimpleImputer(strategy="median"),
+                numeric_features,
+            )
+        )
+
+    if categorical_features:
+        transformers.append(
+            (
+                "categorical",
+                Pipeline(
+                    steps=[
+                        ("imputer", SimpleImputer(strategy="most_frequent")),
+                        (
+                            "encoder",
+                            OrdinalEncoder(
+                                handle_unknown="use_encoded_value",
+                                unknown_value=-1
+                            ),
+                        ),
+                    ]
+                ),
+                categorical_features,
+            )
+        )
+
+    preprocessor = ColumnTransformer(transformers=transformers)
+    x_processed = preprocessor.fit_transform(x)
+
+    model = HistGradientBoostingClassifier(
+        random_state=random_state,
+        early_stopping=False,
+        max_iter=100,
+        learning_rate=0.1
+    )
+
+    cv = StratifiedKFold(
+        n_splits=5,
+        shuffle=True,
+        random_state=random_state
+    )
+
+    scores = cross_val_score(
+        estimator=model,
+        X=x_processed,
+        y=y,
+        cv=cv,
+        scoring="roc_auc",
+        n_jobs=-1
+    )
+
+    return {
+        "auc_mean": float(np.mean(scores)),
+        "auc_std": float(np.std(scores)),
+        "n_base": int(len(base_features)),
+        "n_compare": int(len(compare_features)),
+    }
+    
+def compute_adversarial_validation(
+    train_features: pl.DataFrame,
+    val_features: pl.DataFrame,
+    test_features: pl.DataFrame,
+    random_state: int = config.RANDOM_STATE,
+) -> pl.DataFrame:
+    comparisons = [
+        ("train_vs_validation", train_features, val_features),
+        ("train_vs_test", train_features, test_features),
+        ("validation_vs_test", val_features, test_features),
+    ]
+
+    records: list[dict[str, object]] = []
+
+    for comparison_name, base_df, compare_df in comparisons:
+        metrics = _adversarial_auc(base_df, compare_df, random_state)
+        records.append({ "comparison": comparison_name, **metrics })
+
+    return pl.DataFrame(records)

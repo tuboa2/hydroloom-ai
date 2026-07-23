@@ -106,7 +106,7 @@ def validate_target(dataframe: pl.DataFrame) -> None:
     target = dataframe[config.TARGET_COLUMN]
     if not target.dtype.is_numeric:
         raise DataValidationError("water_quality_index must be numeric.")
-    if not np.isfinite(target).all():
+    if not target.is_finite().all():
         raise DataValidationError("water_quality_index contains non-finite values.")
     if (target < 0).any() or (target > 100).any():
         raise DataValidationError(

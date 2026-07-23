@@ -3,10 +3,10 @@ import os
 from pathlib import Path
 from typing import Final
 
-PROJECT_ROOT: Final[Path] = Path(os.getenv("HYDROMIND_ROOT", Path.cwd())).resolve()
-DATA_DIR: Final[Path] = PROJECT_ROOT / "data" / "processed"
-ARTIFACT_DIR: Final[Path] = PROJECT_ROOT / "artifacts" / "preprocess"
-MLFLOW_DIR: Final[Path] = PROJECT_ROOT / "mlruns"
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+DATA_DIR = PROJECT_ROOT / "hydromind" / "data" / "processed"
+ARTIFACT_DIR: Final[Path] = PROJECT_ROOT / "hydromind" / "artifacts" / "preprocess"
+MLFLOW_DIR: Final[Path] = PROJECT_ROOT / "hydromind" / "mlruns"
 
 RANDOM_STATE: Final[int] = 42
 
@@ -19,7 +19,7 @@ EXPECTED_ROW_COUNT: Final[int] = 1_825
 EXPECTED_YEAR_COUNT: Final[int] = 5
 DAYS_PER_YEAR: Final[int] = 365
 
-HEMISPHERES: Final[tuple[str, ...]] = ("nort", "south")
+HEMISPHERES: Final[tuple[str, ...]] = ("north", "south")
 
 EXPECTED_SCHEMA: Final[tuple[str, ...]] = (
     "hemisphere",

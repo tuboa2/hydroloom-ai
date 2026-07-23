@@ -7,14 +7,16 @@ import wandb
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
-from config import RANDOM_STATE
+from .config import RANDOM_STATE
 
 MAX_PARAM_LENGTH = 500
+
+os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
 
 @dataclass(frozen=True)
 class TrackingConfig:
     project: str = "hydroloom-service-a"
-    experiment: str = "phase1-data-governance"
+    experiment: str = "preprocess-data-governance"
     run_name: str | None = None
     mlflow_tracking_uri: str | None = None
     wandb_mode: str = "online"
@@ -90,7 +92,7 @@ class ExperimentTracker:
             project=self._config.project,
             name=run_name,
             mode=wandb_mode,
-            reinit=True,
+            reinit="finish_previous",
             config={
                 "experiment": self._config.experiment,
                 "seed": RANDOM_STATE,

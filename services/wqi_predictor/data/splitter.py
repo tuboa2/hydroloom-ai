@@ -70,8 +70,8 @@ def split_chronologically(ingested: IngestedHemisphere) -> ChronologicalSplit:
                 "max": int(train_days.max()),
             },
             "validation": {
-                "min": int(validation_days.min()),
-                "max": int(validation_days.max()),
+                "min": int(val_days.min()),
+                "max": int(val_days.max()),
             },
             "test": {
                 "min": int(test_days.min()),
