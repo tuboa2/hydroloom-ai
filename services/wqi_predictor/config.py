@@ -5,7 +5,7 @@ from typing import Final
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DATA_DIR = PROJECT_ROOT / "hydromind" / "data" / "processed"
-ARTIFACT_DIR: Final[Path] = PROJECT_ROOT / "hydromind" / "artifacts" / "preprocess"
+ARTIFACT_DIR: Final[Path] = PROJECT_ROOT / "hydromind" / "artifacts" / "setup"
 MLFLOW_DIR: Final[Path] = PROJECT_ROOT / "hydromind" / "mlruns"
 
 RANDOM_STATE: Final[int] = 42

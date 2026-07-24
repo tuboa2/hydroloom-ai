@@ -16,7 +16,7 @@ os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
 @dataclass(frozen=True)
 class TrackingConfig:
     project: str = "hydroloom-service-a"
-    experiment: str = "preprocess-data-governance"
+    experiment: str = "setup-data-governance"
     run_name: str | None = None
     mlflow_tracking_uri: str | None = None
     wandb_mode: str = "online"
