@@ -93,3 +93,48 @@ VALIDATION_YEAR: Final[int] = 3
 TEST_YEAR: Final[int] = 4
 
 PSI_BINS: Final[int] = 10
+
+CLUSTER_COLUMNS: Final[tuple[str, ...]] = (
+    "cluster_heavy_users_daily_mean_liters",
+    "cluster_conservationists_daily_mean_liters",
+    "cluster_outdoor_landscape_daily_mean_liters",
+    "cluster_standard_consumers_daily_mean_liters",
+)
+
+POLICY_COLUMNS: Final[tuple[str, ...]] = (
+    "season_label",
+    "tiered_pricing_regime",
+    "watering_ban_active",
+)
+
+COMMON_EXCLUDED_COLUMNS: Final[frozenset[str]] = frozenset(
+    {
+        "is_weekend",
+        "holiday_weekend_flag",
+    }
+)
+
+EXOGENOUS_DRIVER_COLUMNS: Final[tuple[str, ...]] = (
+    "daily_rainfall_mm",
+    "rolling_7d_rainfall_mm",
+    "cumulative_storm_rainfall_mm",
+    "daily_runoff_volume_m3",
+    "total_suspended_solids_mg_L",
+    "nutrient_load_index",
+    "cumulative_heat_index",
+    "temp_anomaly_celsius",
+    "consecutive_dry_days",
+)
+
+INTERACTION_SOURCE_COLUMNS: Final[tuple[str, ...]] = (
+    "daily_rainfall_mm",
+    "antecedent_moisture_condition",
+    "cumulative_storm_rainfall_mm",
+    "total_suspended_solids_mg_L",
+    "daily_runoff_volume_m3",
+    "temp_anomaly_celsius",
+    "nutrient_load_index",
+    "cumulative_heat_index",
+    "consecutive_dry_days",
+    "rolling_7d_rainfall_mm",
+)
