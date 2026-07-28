@@ -31,6 +31,14 @@ target-version = ["py311"]
 line-length = 100
 target-version = "py311"
 
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP"] # Errors, Pyflakes, Import sorting, Naming, Pyupgrade
+ignore = ["E501"]                  # Defer long line handling to the formatter
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

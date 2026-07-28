@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
-
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
@@ -18,13 +17,9 @@ def build_preprocessor(feature_columns: Sequence[str]) -> ColumnTransformer:
     if not feature_columns:
         raise ValueError("feature_columns must not be empty.")
 
-    categorical_features = [
-        column for column in feature_columns if column in CATEGORICAL_COLUMNS
-    ]
+    categorical_features = [column for column in feature_columns if column in CATEGORICAL_COLUMNS]
 
-    numeric_features = [
-        column for column in feature_columns if column not in CATEGORICAL_COLUMNS
-    ]
+    numeric_features = [column for column in feature_columns if column not in CATEGORICAL_COLUMNS]
 
     standard_features: list[str] = []
     robust_features: list[str] = []
@@ -63,10 +58,10 @@ def build_preprocessor(feature_columns: Sequence[str]) -> ColumnTransformer:
                 Pipeline(
                     steps=[
                         ("imputer", SimpleImputer(strategy="median")),
-                        ("scaler", RobustScaler())
+                        ("scaler", RobustScaler()),
                     ]
                 ),
-                robust_features
+                robust_features,
             )
         )
 
@@ -77,13 +72,10 @@ def build_preprocessor(feature_columns: Sequence[str]) -> ColumnTransformer:
                 Pipeline(
                     steps=[
                         ("imputer", SimpleImputer(strategy="median")),
-                        (
-                            "transformer",
-                            PowerTransformer(method="yeo-johnson", standardize=True)
-                        )
+                        ("transformer", PowerTransformer(method="yeo-johnson", standardize=True)),
                     ]
                 ),
-                power_features
+                power_features,
             )
         )
 
@@ -100,11 +92,11 @@ def build_preprocessor(feature_columns: Sequence[str]) -> ColumnTransformer:
                                 handle_unknown="use_encoded_value",
                                 unknown_value=-1,
                                 dtype=np.float64,
-                            )
-                        )
+                            ),
+                        ),
                     ]
                 ),
-                categorical_features
+                categorical_features,
             )
         )
 
@@ -112,11 +104,9 @@ def build_preprocessor(feature_columns: Sequence[str]) -> ColumnTransformer:
         raise ValueError("No valid preprocessing transformers were constructed.")
 
     preprocessor = ColumnTransformer(
-        transformers=transformers,
-        remainder="drop",
-        verbose_feature_names_out=False
+        transformers=transformers, remainder="drop", verbose_feature_names_out=False
     )
 
-    preprocessor.set_output(transform="polars")
+    preprocessor.set_output(transform="pandas")
 
     return preprocessor
