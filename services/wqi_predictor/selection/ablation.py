@@ -43,7 +43,7 @@ def apply_cluster_feature_gate(
     available_set = set(available_features)
 
     raw_present = [
-        column for column in RAW_CLUSTER_FEATURES
+        column for column in RAW_CLUSTER_FEATURES if column in available_set
     ]
 
     if not raw_present:
@@ -144,4 +144,222 @@ def apply_cluster_feature_gate(
         selected_features=gated_features,
         report=report,
     )
+
+def evaluate_validation_rmse(
+    x_train: pl.DataFrame,
+    y_train: pl.Series,
+    x_val: pl.DataFrame,
+    y_val: pl.Series,
+    feature_columns: Sequence[str],
+    random_state: int = 42,
+    n_jobs: int | None = -1,
+) -> float:
+    feature_columns = list(feature_columns)
+
+    if not feature_columns:
+        return float("inf")
+
+    preprocessor = build_preprocessor(feature_columns)
+
+    pipeline = Pipeline(
+        steps=[
+            ("preprocessor", preprocessor),
+            (
+                "model",
+                RandomForestRegressor(
+                    n_estimators=300,
+                    random_state=random_state,
+                    n_jobs=n_jobs,
+                ),
+            ),
+        ]
+    )
+
+    pipeline.fit(x_train[feature_columns], y_train)
+
+    predictions = pipeline.predict(x_val[feature_columns])
+
+    return float(np.sqrt(mean_squared_error(y_val, predictions)))
+
+def enforce_feature_cap(
+    feature_columns: Sequence[str],
+    scores: Mapping[str, float],
+    feature_cap: int,
+    required_columns: Sequence[str] = REQUIRED_FEATURES,
+) -> list[str]:
+    feature_columns = list(feature_columns)
+
+    required_present = [
+        column for column in required_columns if column in feature_columns
+    ]
+
+    if feature_cap <= 0:
+        return []
+
+    if len(required_present) >= feature_cap:
+        return required_present[:feature_cap]
+
+    remaining = [
+        column for column in feature_columns if column not in required_present
+    ]
+
     
+    remaining = sorted(
+        remaining,
+        key=lambda column: float(scores.get(column, 0.0)),
+        reverse=True
+    )
+
+    remaining_slots = feature_cap - len(required_present)
+
+    return required_present + remaining[:remaining_slots]
+
+def run_family_ablation(
+    x_train: pl.DataFrame,
+    y_train: pl.Series,
+    x_val: pl.DataFrame,
+    y_val: pl.Series,
+    feature_columns: Sequence[str],
+    scores: Mapping[str, float],
+    feature_cap: int,
+    required_columns: Sequence[str] = REQUIRED_FEATURES,
+    min_relative_improvement: float = 0.005,
+    random_state: int = 42,
+    n_jobs: int | None = -1
+) -> tuple[list[str], pl.DataFrame, float, float, list[str]]:
+    feature_columns = list(feature_columns)
+
+    if not feature_columns:
+        empty_report = pl.DataFrame(
+            columns=[
+                "family",
+                "feature_count_without_family",
+                "baseline_rmse",
+                "ablation_rmse",
+                "relative_rmse_change",
+                "protected",
+                "evaluated",
+                "dropped",
+            ]
+        )
+
+        return [], empty_report, float("inf"), float("inf"), []
+
+    families = sorted(
+        {infer_feature_family(column) for column in feature_columns}
+    )
+
+    protected_families = {
+        infer_feature_family(column)
+        for column in required_columns
+        if column in feature_columns
+    }
+
+    baseline_rmse = evaluate_validation_rmse(
+        x_train=x_train,
+        y_train=y_train,
+        x_val=x_val,
+        y_val=y_val,
+        feature_columns=feature_columns,
+        random_state=random_state,
+        n_jobs=n_jobs
+    )
+
+    records: list[dict[str, Any]] = []
+    dropped_families: list[str] = []
+
+    for family in families:
+        candidate_features = [
+            column
+            for column in feature_columns
+            if infer_feature_family(column) != family
+        ]
+
+        protected = family in protected_families
+
+        if not candidate_features:
+            records.append(
+                {
+                    "family": family,
+                    "feature_count_without_family": 0,
+                    "baseline_rmse": baseline_rmse,
+                    "ablation_rmse": np.nan,
+                    "relative_rmse_change": np.nan,
+                    "protected": protected,
+                    "evaluated": False,
+                    "dropped": False,
+                }
+            )
+            continue
+            
+        if protected:
+            ablation_rmse = baseline_rmse
+            relative_change = 0.0
+            evaluated = False
+            dropped = False
+        else:
+            ablation_rmse = evaluate_validation_rmse(
+                x_train=x_train,
+                y_train=y_train,
+                x_val=x_val,
+                y_val=y_val,
+                feature_columns=candidate_features,
+                random_state=random_state,
+                n_jobs=n_jobs,
+            )
+
+            if baseline_rmse > 0.0:
+                relative_change = (baseline_rmse - ablation_rmse) / baseline_rmse
+            else:
+                relative_change = 0.0
+
+            evaluated = True
+            dropped = relative_change >= min_relative_improvement
+
+            if dropped:
+                dropped_families.append(family)
+
+        records.append(
+            {
+                "family": family,
+                "feature_count_without_family": len(candidate_features),
+                "baseline_rmse": baseline_rmse,
+                "ablation_rmse": ablation_rmse,
+                "relative_rmse_change": relative_change,
+                "protected": protected,
+                "evaluated": evaluated,
+                "dropped": dropped,
+            }
+        )
+
+    retained_features = [
+        column
+        for column in feature_columns
+        if infer_feature_family(column) not in dropped_families
+    ]
+           
+    if not retained_features:
+       retained_features = feature_columns
+       dropped_families = []
+
+    final_features = enforce_feature_cap(
+        feature_columns=retained_features,
+        scores=scores,
+        feature_cap=feature_cap,
+        required_columns=required_columns,
+    )
+
+    final_rmse = evaluate_validation_rmse(
+        x_train=x_train,
+        y_train=y_train,
+        x_val=x_val,
+        y_val=y_val,
+        feature_columns=final_features,
+        random_state=random_state,
+        n_jobs=n_jobs,
+    )
+
+    report = pl.DataFrame(records)
+
+    return final_features, report, final_rmse, baseline_rmse, dropped_families
+        
