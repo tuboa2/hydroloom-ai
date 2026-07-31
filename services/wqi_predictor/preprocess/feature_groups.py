@@ -74,7 +74,7 @@ MODERATE_BASES: Final[frozenset[str]] = frozenset(
     }
 )
 
-CLUSTER_RAW_COLUMNS: Final[frozenset[str]] = frozenset(
+RAW_CLUSTER_FEATURES: Final[frozenset[str]] = frozenset(
     {
         "cluster_heavy_users_daily_mean_liters",
         "cluster_conservationists_daily_mean_liters",
@@ -159,8 +159,8 @@ def infer_feature_family(column: str) -> str:
         return "calendar"
     if column in CLUSTER_AGGREGATE_COLUMNS:
         return "cluster_aggregates"
-    if column in CLUSTER_RAW_COLUMNS or any(
-        column.startswith(prefix) for prefix in CLUSTER_RAW_COLUMNS
+    if column in RAW_CLUSTER_FEATURES or any(
+        column.startswith(prefix) for prefix in RAW_CLUSTER_FEATURES
     ):
         return "cluster_raw"
     if column in RAW_INTERACTION_COLUMNS:
@@ -179,8 +179,8 @@ def assign_numeric_transformer(column: str) -> str:
         column.startswith(base) for base in NEAR_NORMAL_BASES
     ):
         return "standard"
-    if column in CLUSTER_RAW_COLUMNS or any(
-        column.startswith(base) for base in CLUSTER_RAW_COLUMNS
+    if column in RAW_CLUSTER_FEATURES or any(
+        column.startswith(base) for base in RAW_CLUSTER_FEATURES
     ):
         return "standard"
     if column in EXTREME_SKEW_BASES:

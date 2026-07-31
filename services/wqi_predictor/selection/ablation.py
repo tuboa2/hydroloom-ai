@@ -9,12 +9,12 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error
 from sklearn.pipeline import Pipeline
 
-from ..preprocessing.feature_groups import (
+from ..preprocess.feature_groups import (
     RAW_CLUSTER_FEATURES,
     REQUIRED_FEATURES,
     infer_feature_family,
 )
-from ..preprocessing.pipeline_factory import build_preprocessor
+from ..preprocess.pipeline_factory import build_preprocessor
 
 CLUSTER_SHARE_FEATURES: tuple[str, ...] = (
     "heavy_share",

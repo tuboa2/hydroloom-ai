@@ -1,17 +1,17 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+from typing import Any
+
 import numpy as np
 import polars as pl
-
-from typing import Any, Sequence
-
 from sklearn.base import clone
 from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor
 from sklearn.inspection import permutation_importance
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.pipeline import Pipeline
 
-from ..preprocessing.pipeline_factory import build_preprocessor
+from ..preprocess.pipeline_factory import build_preprocessor
 
 STABILITY_REPORT_COLUMNS = (
     "feature",
@@ -19,8 +19,9 @@ STABILITY_REPORT_COLUMNS = (
     "mean_score",
     "mean_perm_importance",
     "mean_split_importance",
-    "ranking_score"
+    "ranking_score",
 )
+
 
 def _normalize_non_negative(values: np.ndarray) -> np.ndarray:
     clipped = np.clip(np.asarray(values, dtype=float), 0.0, None)
@@ -35,6 +36,7 @@ def _normalize_non_negative(values: np.ndarray) -> np.ndarray:
 
     return clipped / max_value
 
+
 def _transformed_feature_names(
     pipeline: Pipeline,
     fallback_features: Sequence[str],
@@ -46,6 +48,7 @@ def _transformed_feature_names(
     except Exception:
         return list(fallback_features)
 
+
 def _align_importances(
     transformed_names: Sequence[str],
     importances: np.ndarray,
@@ -53,7 +56,9 @@ def _align_importances(
 ) -> np.ndarray:
     importances = np.asarray(importances, dtype=float)
 
-    if importances.size == len(feature_columns) and list(transformed_names) == list(feature_columns):
+    if importances.size == len(feature_columns) and list(transformed_names) == list(
+        feature_columns
+    ):
         return importances
 
     aligned = np.zeros(len(feature_columns), dtype=float)
@@ -79,6 +84,7 @@ def _align_importances(
 
     return aligned
 
+
 def run_stability_selection(
     x_train: pl.DataFrame,
     y_train: pl.Series,
@@ -93,7 +99,7 @@ def run_stability_selection(
     n_repeats: int = 5,
     n_jobs: int = -1,
     permutation_weight: float = 0.5,
-    split_weight: float = 0.5
+    split_weight: float = 0.5,
 ) -> tuple[list[str], pl.DataFrame, dict[str, float]]:
     feature_columns = list(feature_columns)
 
@@ -115,21 +121,13 @@ def run_stability_selection(
 
     cv = TimeSeriesSplit(n_splits=n_splits, gap=gap)
 
-    selected_by_run: dict[str, list[bool]] = {
-        column: [] for column in feature_columns
-    }
+    selected_by_run: dict[str, list[bool]] = {column: [] for column in feature_columns}
 
-    score_by_run: dict[str, list[float]] = {
-        column: [] for column in feature_columns
-    }
+    score_by_run: dict[str, list[float]] = {column: [] for column in feature_columns}
 
-    perm_importance_by_run: dict[str, list[float]] = {
-        column: [] for column in feature_columns
-    }
+    perm_importance_by_run: dict[str, list[float]] = {column: [] for column in feature_columns}
 
-    split_importance_by_run: dict[str, list[float]] = {
-        column: [] for column in feature_columns
-    }
+    split_importance_by_run: dict[str, list[float]] = {column: [] for column in feature_columns}
 
     for seed in seeds:
         estimators = [
@@ -183,8 +181,7 @@ def run_stability_selection(
                     split_aligned = np.zeros(len(feature_columns), dtype=float)
                 else:
                     transformed_names = _transformed_feature_names(
-                        pipeline=pipeline,
-                        fallback_features=feature_columns
+                        pipeline=pipeline, fallback_features=feature_columns
                     )
 
                     split_aligned = _align_importances(
@@ -195,10 +192,13 @@ def run_stability_selection(
 
                 fold_split_importances.append(split_aligned)
 
+                X_eval = x_fold_val.to_pandas() if hasattr(x_fold_val, "to_pandas") else X_val
+                y_eval = y_fold_val.to_pandas() if hasattr(y_fold_val, "to_pandas") else y_val
+
                 permutation_result = permutation_importance(
                     estimator=pipeline,
-                    X=x_fold_val,
-                    y=y_fold_val,
+                    X=X_eval,
+                    y=y_eval,
                     n_repeats=n_repeats,
                     random_state=seed,
                     scoring="neg_root_mean_squared_error",
@@ -228,7 +228,7 @@ def run_stability_selection(
             )
 
             selected = (combined_score >= run_score_threshold) & (
-                (mean_perm_importance > 0.0) | (mean_split_importance > 0.0) 
+                (mean_perm_importance > 0.0) | (mean_split_importance > 0.0)
             )
 
             for i, column in enumerate(feature_columns):
@@ -259,7 +259,7 @@ def run_stability_selection(
                 "mean_score": mean_score,
                 "mean_perm_importance": mean_perm_importance,
                 "mean_split_importance": mean_split_importance,
-                "ranking_score": ranking_score
+                "ranking_score": ranking_score,
             }
         )
 
@@ -272,9 +272,7 @@ def run_stability_selection(
     report = report.sort("ranking_score", descending=True)
 
     selected_features = (
-        report.filter(pl.col("stability") >= min_stability)
-        .get_column("feature")
-        .to_list()
+        report.filter(pl.col("stability") >= min_stability).get_column("feature").to_list()
     )
 
     if len(selected_features) < min_fallback_features:
@@ -288,4 +286,3 @@ def run_stability_selection(
     scores = dict(zip(report["feature"], report["ranking_score"]))
 
     return selected_features, report, scores
-        

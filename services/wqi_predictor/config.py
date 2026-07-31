@@ -5,7 +5,7 @@ from typing import Final
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DATA_DIR = PROJECT_ROOT / "hydromind" / "data" / "processed"
-ARTIFACT_DIR: Final[Path] = PROJECT_ROOT / "hydromind" / "artifacts" / "setup"
+ARTIFACT_DIR: Final[Path] = PROJECT_ROOT / "hydromind" / "artifacts"
 MLFLOW_DIR: Final[Path] = PROJECT_ROOT / "hydromind" / "mlruns"
 
 RANDOM_STATE: Final[int] = 42
@@ -138,3 +138,14 @@ INTERACTION_SOURCE_COLUMNS: Final[tuple[str, ...]] = (
     "consecutive_dry_days",
     "rolling_7d_rainfall_mm",
 )
+
+SOUTH_DEFAULT_EXCLUSIONS: frozenset[str] = frozenset(
+    {
+        "season_label",
+        "tiered_pricing_regime",
+        "watering_ban_active",
+        "demand_x_runoff_pressure",
+        "drought_x_heat_stress",
+    }
+)
+

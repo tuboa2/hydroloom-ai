@@ -13,7 +13,7 @@ from ..config import (
     YEAR_INDEX_COLUMN,
 )
 from ..data.validator import matches_any_pattern
-from ..preprocessing.feature_groups import (
+from ..preprocess.feature_groups import (
     FAMILY_PRIORITY,
     REQUIRED_FEATURES,
     infer_feature_family,
@@ -48,7 +48,7 @@ def _choose_collinear_drop(left: str, right: str) -> str:
 
     return max(left, right)
 
-def run(
+def run_screening(
     x_train: pl.DataFrame,
     feature_columns: Sequence[str] | None = None,
     missingness_threshold: float = 0.999,
@@ -135,7 +135,9 @@ def run(
     if len(numeric_columns) > 1:
         numeric_frame = x_train[numeric_columns].clone()
         medians = numeric_frame.median()
-        numeric_frame = numeric_frame.fill_null(medians)
+        numeric_frame = numeric_frame.with_columns(
+            pl.all().fill_null(pl.all().median())
+        )
 
         correlation = numeric_frame.corr().select(pl.all().abs())
 
