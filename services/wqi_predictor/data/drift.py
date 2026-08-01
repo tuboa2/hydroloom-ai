@@ -25,9 +25,7 @@ def _psi_category(psi: float) -> str:
         return "moderate_drift"
     return "significant_drift"
 
-def _psi_numeric(base: pl.Series, compare: pl.Series, bins: int) -> float:
-    base_values = base.drop_nulls().to_numpy().astype(float)
-    compare_values = compare.drop_nulls().to_numpy().astype(float)
+def _psi_numeric(base_values: np.ndarray, compare_values: np.ndarray, bins: int) -> float:
 
     if base_values.size == 0 or compare_values.size == 0:
         return np.nan
@@ -53,9 +51,7 @@ def _psi_numeric(base: pl.Series, compare: pl.Series, bins: int) -> float:
     psi = np.sum((compare_pct - base_pct) * np.log(compare_pct / base_pct))
     return float(psi)
 
-def _psi_categorical(base: pl.Series, compare: pl.Series) -> float:
-    base_values = base.drop_nulls().cast(pl.String)
-    compare_values = compare.drop_nulls().cast(pl.String)
+def _psi_categorical(base_values: pl.Series, compare_values: pl.Series) -> float:
 
     if base_values.is_empty() or compare_values.is_empty():
         return np.nan
@@ -105,10 +101,16 @@ def compute_ks_metrics(
     for column in columns:
         if not train_df[column].dtype.is_numeric():
             continue
+            
+        cached_arrays = {
+            "train": dataframes["train"][column].drop_nulls().to_numpy().astype(float),
+            "validation": dataframes["validation"][column].drop_nulls().to_numpy().astype(float),
+            "test": dataframes["test"][column].drop_nulls().to_numpy().astype(float),
+        }
            
         for comparison_name, base_key, compare_key in comparisons:
-            base = dataframes[base_key][column].drop_nulls().to_numpy().astype(float)
-            compare = dataframes[compare_key][column].drop_nulls().to_numpy().astype(float)
+            base = cached_arrays[base_key]
+            compare = cached_arrays[compare_key]
 
             if base.size == 0 or compare.size == 0:
                 statistic = np.nan
@@ -138,24 +140,44 @@ def compute_psi_metrics(
 ) -> pl.DataFrame:
     logger.info("Computing PSI drift metrics across %d columns.", len(columns))
     comparisons = [
-        ("train_as_base_vs_validation", train_df, val_df),
-        ("train_as_base_vs_test", train_df, test_df),
-        ("validation_as_base_vs_test", val_df, test_df)
+        ("train_as_base_vs_validation", "train", "validation"),
+        ("train_as_base_vs_test", "train", "test"),
+        ("validation_as_base_vs_test", "validation", "test")
     ]
+    
+    dataframes = {
+        "train": train_df,
+        "validation": val_df,
+        "test": test_df
+    }
 
     records: list[dict[str, object]] = []
 
     for column in columns:
         is_numeric = train_df.schema[column].is_numeric()
-        for comparison_name, base_df, compare_df in comparisons:
+        
+        if is_numeric:
+            cached_data = {
+                "train": dataframes["train"][column].drop_nulls().to_numpy().astype(float),
+                "validation": dataframes["validation"][column].drop_nulls().to_numpy().astype(float),
+                "test": dataframes["test"][column].drop_nulls().to_numpy().astype(float),
+            }
+        else:
+            cached_data = {
+                "train": dataframes["train"][column].drop_nulls().cast(pl.String),
+                "validation": dataframes["validation"][column].drop_nulls().cast(pl.String),
+                "test": dataframes["test"][column].drop_nulls().cast(pl.String),
+            }
+
+        for comparison_name, base_key, compare_key in comparisons:
             if is_numeric:
                 psi = _psi_numeric(
-                    base_df[column],
-                    compare_df[column],
+                    cached_data[base_key],
+                    cached_data[compare_key],
                     config.PSI_BINS
                 )
             else:
-                psi = _psi_categorical(base_df[column], compare_df[column])
+                psi = _psi_categorical(cached_data[base_key], cached_data[compare_key])
 
             records.append(
                 {
