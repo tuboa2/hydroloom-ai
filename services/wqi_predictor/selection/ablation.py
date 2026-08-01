@@ -231,7 +231,7 @@ def run_family_ablation(
 
     if not feature_columns:
         empty_report = pl.DataFrame(
-            columns=[
+            schema=[
                 "family",
                 "feature_count_without_family",
                 "baseline_rmse",

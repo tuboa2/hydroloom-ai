@@ -13,8 +13,6 @@ from ..features.engineer import EngineeredDataset, build_engineered_dataset
 from ..seeding import env_seed
 from ..tracking import ExperimentTracker, TrackingConfig
 
-ARTIFACT_DIR = config.PROJECT_ROOT / "artifacts" / "engineer"
-
 
 def _save_parquet(dataframe: pl.DataFrame, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -96,7 +94,9 @@ def _log_feature_engineer_metrics(
 def run(tracking_enabled: bool = True) -> dict[str, Any]:
     env_seed()
 
-    ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
+    base_dir = config.ARTIFACT_DIR / "feature-engineer"
+
+    base_dir.mkdir(parents=True, exist_ok=True)
     config.MLFLOW_DIR.mkdir(parents=True, exist_ok=True)
 
     mlflow_tracking_uri = os.getenv(
@@ -114,7 +114,7 @@ def run(tracking_enabled: bool = True) -> dict[str, Any]:
     summary: dict[str, Any] = {
         "phase": "feature_engineer",
         "random_state": config.RANDOM_STATE,
-        "artifact_dir": str(ARTIFACT_DIR),
+        "base_dir": str(base_dir),
         "hemispheres": {},
     }
 
@@ -124,7 +124,7 @@ def run(tracking_enabled: bool = True) -> dict[str, Any]:
                 "phase": "feature_engineer",
                 "random_state": config.RANDOM_STATE,
                 "data_dir": str(config.DATA_DIR),
-                "artifact_dir": str(ARTIFACT_DIR),
+                "base_dir": str(base_dir),
                 "hemispheres": list(config.HEMISPHERES),
                 "cold_start_target": 50.0,
                 "seasonal_smoothing_constant": 10.0,
@@ -140,8 +140,8 @@ def run(tracking_enabled: bool = True) -> dict[str, Any]:
 
             split_frames = _split_engineered_dataset(engineered)
 
-            artifact_dir = ARTIFACT_DIR / hemisphere
-            split_dir = artifact_dir / "splits"
+            hemi_dir = base_dir / hemisphere
+            split_dir = hemi_dir / "splits"
             split_dir.mkdir(parents=True, exist_ok=True)
 
             # Dynamic & safe parquet exporting for all splits
@@ -161,12 +161,12 @@ def run(tracking_enabled: bool = True) -> dict[str, Any]:
 
             _save_json(
                 engineered.metadata,
-                artifact_dir / "feature_engineer_metadata.json",
+                base_dir / "feature_engineer_metadata.json",
             )
 
             _save_json(
                 engineered.metadata["feature_columns"],
-                artifact_dir / "feature_columns.json",
+                base_dir / "feature_columns.json",
             )
 
             _log_feature_engineer_metrics(
@@ -176,10 +176,10 @@ def run(tracking_enabled: bool = True) -> dict[str, Any]:
             )
 
             # Log directory containing artifacts
-            tracker.log_artifact(artifact_dir)
+            tracker.log_artifact(base_dir)
 
             summary["hemispheres"][hemisphere] = {
-                "artifact_dir": str(artifact_dir),
+                "base_dir": str(base_dir),
                 "feature_count": engineered.metadata["feature_count"],
                 "split_sizes": engineered.metadata["split_sizes"],
             }

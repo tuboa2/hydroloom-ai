@@ -68,7 +68,7 @@ def _save_csv(frame: pl.DataFrame, path: Path) -> None:
 
 
 def _load_splits(hemisphere: str) -> dict[str, pl.DataFrame | pl.Series]:
-    base_dir = config.ARTIFACT_DIR / "preprocess" / hemisphere / "splits"
+    base_dir = config.ARTIFACT_DIR / "feature-engineer" / hemisphere / "splits"
 
     if not base_dir.exists():
         raise FileNotFoundError(

@@ -135,7 +135,7 @@ def build_engineered_dataset(
 
     split_masks = {
         "train": year_index.is_in(TRAIN_YEARS).to_numpy(),
-        "validation": (year_index == VALIDATION_YEAR).to_numpy(),
+        "val": (year_index == VALIDATION_YEAR).to_numpy(),
         "test": (year_index == TEST_YEAR).to_numpy(),
     }
 
@@ -150,7 +150,7 @@ def build_engineered_dataset(
         "numeric_feature_columns": list(numeric_columns),
         "split_sizes": {
             "train": int(split_masks["train"].sum()),
-            "validation": int(split_masks["validation"].sum()),
+            "val": int(split_masks["val"].sum()),
             "test": int(split_masks["test"].sum()),
         },
         "feature_config": {

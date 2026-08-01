@@ -192,9 +192,9 @@ def run_stability_selection(
 
                 fold_split_importances.append(split_aligned)
 
-                X_eval = x_fold_val.to_pandas() if hasattr(x_fold_val, "to_pandas") else X_val
-                y_eval = y_fold_val.to_pandas() if hasattr(y_fold_val, "to_pandas") else y_val
-
+                X_eval = x_fold_val.to_pandas()
+                y_eval = y_fold_val.to_pandas()
+                
                 permutation_result = permutation_importance(
                     estimator=pipeline,
                     X=X_eval,
