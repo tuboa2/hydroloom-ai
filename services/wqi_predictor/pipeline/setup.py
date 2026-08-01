@@ -11,6 +11,9 @@ from ..data.ingestion import load_hemisphere
 from ..data.splitter import split_chronologically
 from ..seeding import env_seed
 from ..tracking import ExperimentTracker, TrackingConfig
+from ..utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 def _save_parquet(dataframe: pl.DataFrame, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -116,7 +119,7 @@ def _log_hemisphere_metrics(
                 "test_mean": metadata["split"]["target"]["test"]["mean"],
                 "train_zero_count": metadata["split"]["target"]["train"]["zero_count"],
                 "val_zero_count": metadata["split"]["target"]["validation"]["zero_count"],
-                "test_zero_count": metadata["split"]["target"]["validation"]["zero_count"],
+                "test_zero_count": metadata["split"]["target"]["test"]["zero_count"],
             },
             "drift": {
                 "ks_wqi_train_vs_val": _extract_column_metric(
@@ -173,6 +176,7 @@ def _log_hemisphere_metrics(
     tracker.log_metrics(metrics)
 
 def run(tracking_enabled: bool = True) -> dict[str, Any]:
+    logger.info("Starting setup pipeline (tracking=%s).", tracking_enabled)
     env_seed()
 
     config.ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
@@ -214,6 +218,11 @@ def run(tracking_enabled: bool = True) -> dict[str, Any]:
 
         for hemisphere in config.HEMISPHERES:
             ingested = load_hemisphere(hemisphere)
+            logger.info(
+                "Processing %s: ingested %d rows.",
+                hemisphere,
+                ingested.raw_frame.shape[0],
+            )
             split = split_chronologically(ingested)
 
             artifact_dir = config.ARTIFACT_DIR / hemisphere
@@ -261,6 +270,10 @@ def run(tracking_enabled: bool = True) -> dict[str, Any]:
                 test_features=split.x_test,
             )
 
+            logger.info(
+                "%s drift metrics computed — writing CSV artifacts.",
+                hemisphere,
+            )
             ks_metrics.write_csv(drift_dir / "ks_metrics.csv")
             psi_metrics.write_csv(drift_dir / "psi_metrics.csv")
             adversarial_metrics.write_csv(
@@ -300,6 +313,7 @@ def run(tracking_enabled: bool = True) -> dict[str, Any]:
             }
 
         tracker.log_params({"status": "complete"})
+        logger.info("Setup pipeline complete for all hemispheres.")
 
     return summary
 

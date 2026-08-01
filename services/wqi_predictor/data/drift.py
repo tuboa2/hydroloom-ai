@@ -10,6 +10,9 @@ from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OrdinalEncoder
 from .. import config
+from ..utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 EPSILON = 1e-6
 
@@ -84,6 +87,7 @@ def compute_ks_metrics(
     test_df: pl.DataFrame,
     columns: list[str]
 ) -> pl.DataFrame:
+    logger.info("Computing KS drift metrics across %d columns.", len(columns))
     dataframes = {
         "train": train_df,
         "validation": val_df,
@@ -123,6 +127,7 @@ def compute_ks_metrics(
                 }
             )
 
+    logger.info("KS drift metrics computed: %d records.", len(records))
     return pl.DataFrame(records)
 
 def compute_psi_metrics(
@@ -131,6 +136,7 @@ def compute_psi_metrics(
     test_df: pl.DataFrame,
     columns: list[str],
 ) -> pl.DataFrame:
+    logger.info("Computing PSI drift metrics across %d columns.", len(columns))
     comparisons = [
         ("train_as_base_vs_validation", train_df, val_df),
         ("train_as_base_vs_test", train_df, test_df),
@@ -160,6 +166,7 @@ def compute_psi_metrics(
                 }
             )
 
+    logger.info("PSI drift metrics computed: %d records.", len(records))
     return pl.DataFrame(records)
 
 def _adversarial_auc(
@@ -263,6 +270,7 @@ def compute_adversarial_validation(
     test_features: pl.DataFrame,
     random_state: int = config.RANDOM_STATE,
 ) -> pl.DataFrame:
+    logger.info("Computing adversarial validation drift metrics.")
     comparisons = [
         ("train_vs_validation", train_features, val_features),
         ("train_vs_test", train_features, test_features),
@@ -273,6 +281,13 @@ def compute_adversarial_validation(
 
     for comparison_name, base_df, compare_df in comparisons:
         metrics = _adversarial_auc(base_df, compare_df, random_state)
+        logger.debug(
+            "Adversarial %s: AUC=%.4f (±%.4f)",
+            comparison_name,
+            metrics.get("auc_mean", float("nan")),
+            metrics.get("auc_std", float("nan")),
+        )
         records.append({ "comparison": comparison_name, **metrics })
 
+    logger.info("Adversarial validation complete: %d comparisons.", len(records))
     return pl.DataFrame(records)

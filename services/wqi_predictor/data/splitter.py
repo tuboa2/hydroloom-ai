@@ -1,10 +1,16 @@
 from __future__ import annotations
+
 import polars as pl
 from dataclasses import dataclass
 from typing import Any, Literal
+
 from .. import config
+from ..utils.logging_config import get_logger
 from .ingestion import IngestedHemisphere
 from .validator import validate_split_integrity
+
+logger = get_logger(__name__)
+
 
 @dataclass(frozen=True)
 class ChronologicalSplit:
@@ -17,8 +23,10 @@ class ChronologicalSplit:
     y_test: pl.Series
     metadata: dict[str, Any]
 
+
 def to_float(val):
     return float(val) if val is not None else None
+
 
 def _series_summary(series: pl.Series) -> dict[str, Any]:
     return {
@@ -29,7 +37,18 @@ def _series_summary(series: pl.Series) -> dict[str, Any]:
         "zero_count": int((series == 0).sum())
     }
 
+
 def split_chronologically(ingested: IngestedHemisphere) -> ChronologicalSplit:
+    """Split an ingested hemisphere into train/validation/test by year index.
+
+    Args:
+        ingested: A validated :class:`IngestedHemisphere`.
+
+    Returns:
+        A :class:`ChronologicalSplit` with disjoint temporal partitions.
+    """
+    logger.info("Splitting %s chronologically by year index.", ingested.hemisphere)
+
     raw = ingested.raw_frame
     features = ingested.feature_frame
     target = ingested.target
@@ -39,6 +58,10 @@ def split_chronologically(ingested: IngestedHemisphere) -> ChronologicalSplit:
     test_mask = (raw[config.YEAR_INDEX_COLUMN] == config.TEST_YEAR).to_numpy()
 
     if not (train_mask | val_mask | test_mask).all():
+        logger.error(
+            "%s: rows fall outside defined train/validation/test year assignments.",
+            ingested.hemisphere,
+        )
         raise ValueError(
             f"{ingested.hemisphere}: one or more rows are outside on what is defined in "
             "train/validation/test year assignments."
@@ -57,6 +80,14 @@ def split_chronologically(ingested: IngestedHemisphere) -> ChronologicalSplit:
     y_train = target.filter(train_mask)
     y_val = target.filter(val_mask)
     y_test = target.filter(test_mask)
+
+    logger.info(
+        "%s split sizes: train=%d, val=%d, test=%d",
+        ingested.hemisphere,
+        len(x_train),
+        len(x_val),
+        len(x_test),
+    )
 
     metadata: dict[str, Any] = {
         "sizes": {

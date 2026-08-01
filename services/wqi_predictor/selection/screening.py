@@ -18,6 +18,9 @@ from ..preprocess.feature_groups import (
     REQUIRED_FEATURES,
     infer_feature_family,
 )
+from ..utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 LEAKAGE_IDENTIFIER_COLUMNS = frozenset(
     {
@@ -58,6 +61,8 @@ def run_screening(
         feature_columns = list(x_train.columns)
     else:
         feature_columns = list(feature_columns)
+
+    logger.info("Running feature screening on %d candidates.", len(feature_columns))
 
     dropped_leakage: list[str] = []
     dropped_missingness: list[str] = []
@@ -191,6 +196,17 @@ def run_screening(
             "dropped_collinearity": len(dropped_collinearity),
         },
     }
+
+    logger.info(
+        "Screening complete: %d → %d retained "
+        "(leakage=%d, missingness=%d, zero_var=%d, collinear=%d).",
+        len(feature_columns),
+        len(retained_final),
+        len(dropped_leakage),
+        len(dropped_missingness),
+        len(dropped_zero_variance),
+        len(dropped_collinearity),
+    )
 
     return retained_final, report  
             

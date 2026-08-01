@@ -6,11 +6,14 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
 from ..config import RANDOM_STATE
+from ..utils.logging_config import get_logger
 from .registry import (
     CLUSTER_COLUMNS,
     EXOGENOUS_DRIVER_COLUMNS,
     HemisphereFeatureConfig,
 )
+
+logger = get_logger(__name__)
 
 EPSILON = 1e-6
 DAYS_PER_YEAR = 365
@@ -23,6 +26,7 @@ def _past_expanding_mean(series: pl.Series, fill_value: float) -> pl.Series:
 
 
 def add_calendar_features(day_index: pl.Series) -> pl.DataFrame:
+    logger.debug("Adding calendar features.")
     col_name = day_index.name or "day_index"
     day_of_year = pl.col(col_name) % DAYS_PER_YEAR
     month = (
@@ -40,6 +44,7 @@ def add_calendar_features(day_index: pl.Series) -> pl.DataFrame:
 
 
 def add_target_features(target: pl.Series, cold_start_target: float = 50.0) -> pl.DataFrame:
+    logger.debug("Adding target features (cold_start_target=%.1f).", cold_start_target)
     target = target.cast(pl.Float64)
     out = target.to_frame()
     past = target.shift(1)
@@ -264,6 +269,7 @@ def add_domain_interactions(
     source: pl.DataFrame,
     config: HemisphereFeatureConfig,
 ) -> pl.DataFrame:
+    logger.debug("Adding domain interaction features.")
     out = source.clone()
 
     def add_product(left: str, right: str, name: str):
@@ -340,6 +346,7 @@ def add_cluster_aggregates(
     source: pl.DataFrame,
     train_mask: np.ndarray,
 ) -> pl.DataFrame:
+    logger.debug("Adding cluster aggregate features.")
     cluster_columns = [column for column in CLUSTER_COLUMNS if column in source.columns]
 
     if not cluster_columns:

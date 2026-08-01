@@ -15,6 +15,9 @@ from ..preprocess.feature_groups import (
     infer_feature_family,
 )
 from ..preprocess.pipeline_factory import build_preprocessor
+from ..utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 CLUSTER_SHARE_FEATURES: tuple[str, ...] = (
     "heavy_share",
@@ -249,6 +252,13 @@ def run_family_ablation(
         {infer_feature_family(column) for column in feature_columns}
     )
 
+    logger.info(
+        "Running family ablation: %d features, %d families, cap=%d.",
+        len(feature_columns),
+        len(families),
+        feature_cap,
+    )
+
     protected_families = {
         infer_feature_family(column)
         for column in required_columns
@@ -360,6 +370,16 @@ def run_family_ablation(
     )
 
     report = pl.DataFrame(records)
+
+    logger.info(
+        "Family ablation complete: %d → %d features "
+        "(baseline_rmse=%.4f, final_rmse=%.4f, dropped_families=%s).",
+        len(feature_columns),
+        len(final_features),
+        baseline_rmse,
+        final_rmse,
+        dropped_families,
+    )
 
     return final_features, report, final_rmse, baseline_rmse, dropped_families
         

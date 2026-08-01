@@ -25,6 +25,9 @@ from ..selection.cv import cv_fold_boundaries, gap_robustness_check
 from ..selection.screening import run_screening
 from ..selection.stability import run_stability_selection
 from ..tracking import ExperimentTracker, TrackingConfig
+from ..utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 ARTIFACT_DIR = config.ARTIFACT_DIR / "selection"
 
@@ -104,6 +107,7 @@ def run_selection(
     n_jobs: int | None = -1,
     south_enabled_features: Sequence[str] = (),
 ) -> dict[str, Any]:
+    logger.info("Starting selection pipeline (tracking=%s).", tracking_enabled)
     env_seed()
 
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
@@ -176,6 +180,12 @@ def run_selection(
                 x_train=x_train,
                 feature_columns=initial_features,
             )
+            logger.info(
+                "%s screening: %d → %d features retained.",
+                hemisphere,
+                len(initial_features),
+                len(screened_features),
+            )
 
             candidate_cap = int(feature_cap * 1.5)
 
@@ -192,6 +202,12 @@ def run_selection(
                 min_fallback_features=10,
                 n_repeats=stability_n_repeats,
                 n_jobs=n_jobs,
+            )
+            logger.info(
+                "%s stability selection: %d → %d features retained.",
+                hemisphere,
+                len(screened_features),
+                len(stability_selected),
             )
 
             if stability_report.is_empty():
@@ -240,6 +256,16 @@ def run_selection(
                 min_relative_improvement=ablation_min_relative_improvement,
                 random_state=config.RANDOM_STATE,
                 n_jobs=n_jobs,
+            )
+            logger.info(
+                "%s ablation: %d → %d final features "
+                "(baseline_rmse=%.4f, final_rmse=%.4f, dropped_families=%s).",
+                hemisphere,
+                len(stability_selected),
+                len(final_features),
+                baseline_validation_rmse,
+                final_validation_rmse,
+                dropped_families,
             )
 
             preprocessor = build_preprocessor(final_features)
@@ -388,6 +414,7 @@ def run_selection(
             }
 
         tracker.log_params({"status": "complete"})
+        logger.info("Selection pipeline complete.")
 
     return summary
 

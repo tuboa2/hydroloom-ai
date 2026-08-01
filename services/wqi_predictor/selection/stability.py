@@ -12,6 +12,9 @@ from sklearn.model_selection import TimeSeriesSplit
 from sklearn.pipeline import Pipeline
 
 from ..preprocess.pipeline_factory import build_preprocessor
+from ..utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 STABILITY_REPORT_COLUMNS = (
     "feature",
@@ -106,6 +109,13 @@ def run_stability_selection(
     if not feature_columns:
         empty_report = pl.DataFrame(schema=list(STABILITY_REPORT_COLUMNS))
         return [], empty_report, {}
+
+    logger.info(
+        "Running stability selection: %d features, %d seeds, %d CV splits.",
+        len(feature_columns),
+        len(seeds),
+        n_splits,
+    )
 
     weight_sum = float(permutation_weight) + float(split_weight)
 
@@ -284,5 +294,14 @@ def run_stability_selection(
         selected_features = selected_features[:candidate_cap]
 
     scores = dict(zip(report["feature"], report["ranking_score"]))
+
+    logger.info(
+        "Stability selection complete: %d features selected "
+        "(min_stability=%.2f, fallback=%d, cap=%s).",
+        len(selected_features),
+        min_stability,
+        min_fallback_features,
+        candidate_cap,
+    )
 
     return selected_features, report, scores

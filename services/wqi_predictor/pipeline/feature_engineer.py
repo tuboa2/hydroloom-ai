@@ -12,6 +12,9 @@ from ..data.ingestion import load_hemisphere
 from ..features.engineer import EngineeredDataset, build_engineered_dataset
 from ..seeding import env_seed
 from ..tracking import ExperimentTracker, TrackingConfig
+from ..utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 def _save_parquet(dataframe: pl.DataFrame, path: Path) -> None:
@@ -92,6 +95,7 @@ def _log_feature_engineer_metrics(
 
 
 def run(tracking_enabled: bool = True) -> dict[str, Any]:
+    logger.info("Starting feature engineering pipeline (tracking=%s).", tracking_enabled)
     env_seed()
 
     base_dir = config.ARTIFACT_DIR / "feature-engineer"
@@ -139,6 +143,11 @@ def run(tracking_enabled: bool = True) -> dict[str, Any]:
             )
 
             split_frames = _split_engineered_dataset(engineered)
+            logger.info(
+                "%s: engineered %d features, saving split artifacts.",
+                hemisphere,
+                engineered.metadata["feature_count"],
+            )
 
             hemi_dir = base_dir / hemisphere
             split_dir = hemi_dir / "splits"
@@ -185,6 +194,7 @@ def run(tracking_enabled: bool = True) -> dict[str, Any]:
             }
 
         tracker.log_params({"status": "complete"})
+        logger.info("Feature engineering pipeline complete.")
 
     return summary
 

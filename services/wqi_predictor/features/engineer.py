@@ -16,6 +16,7 @@ from ..config import (
     VALIDATION_YEAR,
     YEAR_INDEX_COLUMN,
 )
+from ..utils.logging_config import get_logger
 from ..data.ingestion import IngestedHemisphere
 from ..features.registry import (
     COMMON_EXCLUDED_COLUMNS,
@@ -32,6 +33,8 @@ from ..features.temporal import (
     add_seasonal_target_encoding,
     add_target_features,
 )
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -64,6 +67,11 @@ def _select_raw_feature_columns(
 def build_engineered_dataset(
     ingested: IngestedHemisphere, cold_start_target: float = 50.0
 ) -> EngineeredDataset:
+    logger.info(
+        "Building engineered dataset for %s (cold_start=%.1f).",
+        ingested.hemisphere,
+        cold_start_target,
+    )
     source = ingested.raw_frame.clone()
     config = get_feature_config(ingested.hemisphere)
 
@@ -128,6 +136,11 @@ def build_engineered_dataset(
     ]
 
     if null_columns:
+        logger.error(
+            "%s: nulls/NaNs remain in engineered features: %s",
+            ingested.hemisphere,
+            null_columns,
+        )
         raise ValueError(
             f"{ingested.hemisphere}: engineered feature frame contains nulls or NaNs "
             f"in columns: {null_columns}"
@@ -162,6 +175,18 @@ def build_engineered_dataset(
             "include_policy_interactions": config.include_policy_interactions,
         },
     }
+
+    logger.info(
+        "%s engineered dataset complete: features=%d (numeric=%d, categorical=%d), "
+        "train=%d, val=%d, test=%d",
+        ingested.hemisphere,
+        metadata["feature_count"],
+        metadata["numeric_feature_count"],
+        metadata["categorical_feature_count"],
+        metadata["split_sizes"]["train"],
+        metadata["split_sizes"]["val"],
+        metadata["split_sizes"]["test"],
+    )
 
     return EngineeredDataset(
         hemisphere=ingested.hemisphere,

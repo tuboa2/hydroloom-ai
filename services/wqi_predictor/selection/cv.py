@@ -10,6 +10,9 @@ from sklearn.model_selection import TimeSeriesSplit
 from sklearn.pipeline import Pipeline
 
 from ..preprocess.pipeline_factory import build_preprocessor
+from ..utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 def make_time_series_cv(n_splits: int = 5, gap: int = 0) -> TimeSeriesSplit:
@@ -61,6 +64,13 @@ def evaluate_features_cv(
             "std_rmse": float("nan"),
             "n_folds": 0,
         }
+
+    logger.debug(
+        "Evaluating %d features with %d-fold TSCV (gap=%d).",
+        len(feature_columns),
+        n_splits,
+        gap,
+    )
 
     cv = make_time_series_cv(n_splits=n_splits, gap=gap)
 
@@ -139,6 +149,12 @@ def gap_robustness_check(
         gap=7,
         random_state=random_state,
         n_jobs=n_jobs,
+    )
+
+    logger.info(
+        "Gap robustness check: gap_0_rmse=%.4f, gap_7_rmse=%.4f.",
+        gap_zero.get("mean_rmse", float("nan")),
+        gap_seven.get("mean_rmse", float("nan")),
     )
 
     return {
