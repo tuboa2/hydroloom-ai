@@ -9,6 +9,8 @@ from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.pipeline import Pipeline
 
+import wandb
+
 from ..preprocess.pipeline_factory import build_preprocessor
 from ..utils.logging_config import get_logger
 
@@ -76,7 +78,7 @@ def evaluate_features_cv(
 
     fold_scores: list[float] = []
 
-    for train_idx, val_idx in cv.split(x_train):
+    for fold_idx, (train_idx, val_idx) in enumerate(cv.split(x_train), start=1):
         x_fold_train = x_train[train_idx][feature_columns]
         x_fold_val = x_train[val_idx][feature_columns]
 
@@ -108,6 +110,18 @@ def evaluate_features_cv(
 
         rmse = float(np.sqrt(mean_squared_error(y_fold_val, predictions)))
         fold_scores.append(rmse)
+
+        if wandb.run is not None:
+            wandb.log(
+                {
+                    f"cv/gap_{gap}/fold": fold_idx,
+                    f"cv/gap_{gap}/fold_rmse": rmse,
+                    f"cv/gap_{gap}/running_mean_rmse": float(np.mean(fold_scores)),
+                    f"cv/gap_{gap}/running_std_rmse": float(np.std(fold_scores))
+                    if len(fold_scores) > 1
+                    else 0.0,
+                }
+            )
 
     if not fold_scores:
         return {
@@ -156,6 +170,14 @@ def gap_robustness_check(
         gap_zero.get("mean_rmse", float("nan")),
         gap_seven.get("mean_rmse", float("nan")),
     )
+
+    if wandb.run is not None:
+        wandb.log(
+            {
+                "cv/gap_0_mean_rmse": gap_zero.get("mean_rmse", float("nan")),
+                "cv/gap_7_mean_rmse": gap_seven.get("mean_rmse", float("nan")),
+            }
+        )
 
     return {
         "gap_0": gap_zero,

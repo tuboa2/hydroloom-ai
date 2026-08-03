@@ -10,6 +10,8 @@ from sklearn.base import clone
 from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor
 from sklearn.model_selection import TimeSeriesSplit
 
+import wandb
+
 from ..preprocess.pipeline_factory import build_preprocessor
 from ..utils.logging_config import get_logger
 
@@ -388,11 +390,7 @@ def _fast_permutation_importance(
     X_work = np.array(X_val, copy=True)
 
     # Deterministic per-fold/per-estimator permutation stream.
-    rng_seed = (
-        int(seed)
-        + 1_000_003 * int(fold_idx)
-        + 2_000_003 * int(est_idx)
-    ) % (2**32 - 1)
+    rng_seed = (int(seed) + 1_000_003 * int(fold_idx) + 2_000_003 * int(est_idx)) % (2**32 - 1)
     rng = np.random.RandomState(rng_seed)
 
     for feature_idx, group in enumerate(groups):
@@ -479,6 +477,8 @@ def _run_single_fold(
     fold_idx: int,
     est_idx: int,
     max_permutation_samples: int,
+    completed_tasks: list[int] | None = None,
+    total_tasks: int | None = None,
 ) -> tuple[np.ndarray | None, np.ndarray | None]:
     """
     Train one estimator on one fold and compute aligned importances.
@@ -552,6 +552,15 @@ def _run_single_fold(
         est_idx=est_idx,
         split_for_skip=split_for_skip,
     )
+
+    if wandb.run is not None and completed_tasks is not None and total_tasks is not None:
+        completed_tasks.append(1)
+        wandb.log(
+            {
+                "stability/completed_tasks": len(completed_tasks),
+                "stability/total_tasks": total_tasks,
+            }
+        )
 
     return split_aligned, perm_aligned
 
@@ -692,8 +701,7 @@ def run_stability_selection(
 
     if X.shape[0] != y.size:
         raise ValueError(
-            "Preprocessed X and y have inconsistent row counts: "
-            f"{X.shape[0]} != {y.size}"
+            f"Preprocessed X and y have inconsistent row counts: {X.shape[0]} != {y.size}"
         )
 
     # Mapping from original features to transformed columns.
@@ -716,14 +724,8 @@ def run_stability_selection(
         if len(train_idx) < 2 or len(val_idx) < 2:
             continue
 
-        train_contiguous = (
-            len(train_idx) > 0
-            and train_idx[-1] == train_idx[0] + len(train_idx) - 1
-        )
-        val_contiguous = (
-            len(val_idx) > 0
-            and val_idx[-1] == val_idx[0] + len(val_idx) - 1
-        )
+        train_contiguous = len(train_idx) > 0 and train_idx[-1] == train_idx[0] + len(train_idx) - 1
+        val_contiguous = len(val_idx) > 0 and val_idx[-1] == val_idx[0] + len(val_idx) - 1
 
         if train_contiguous and val_contiguous:
             splits.append(
@@ -780,6 +782,12 @@ def run_stability_selection(
 
     max_permutation_samples = int(_PERMUTATION_MAX_VALIDATION_SAMPLES)
 
+    completed_tasks: list[int] = []
+    total_tasks = len(tasks)
+
+    if wandb.run is not None:
+        wandb.log({"stability/total_tasks": total_tasks})
+
     # -------------------------------------------------------------------------
     # Parallel execution strategy.
     #
@@ -816,6 +824,8 @@ def run_stability_selection(
                 fold_idx,
                 est_idx,
                 max_permutation_samples,
+                completed_tasks,
+                total_tasks,
             )
             for seed, estimator, train_index, val_index, fold_idx, est_idx in tasks
         ]
@@ -835,6 +845,8 @@ def run_stability_selection(
                 fold_idx,
                 est_idx,
                 max_permutation_samples,
+                completed_tasks,
+                total_tasks,
             )
             for seed, estimator, train_index, val_index, fold_idx, est_idx in tasks
         )
@@ -870,6 +882,24 @@ def run_stability_selection(
 
             normalized_perm_importance = _normalize_non_negative(mean_perm_importance)
             normalized_split_importance = _normalize_non_negative(mean_split_importance)
+
+            if wandb.run is not None:
+                wandb.log(
+                    {
+                        f"stability/seed_{_seed}/est_{_est_idx}_mean_perm_imp": float(
+                            np.mean(mean_perm_importance)
+                        ),
+                        f"stability/seed_{_seed}/est_{_est_idx}_perm_imp_dist": wandb.Histogram(
+                            mean_perm_importance
+                        ),
+                        f"stability/seed_{_seed}/est_{_est_idx}_mean_split_imp": float(
+                            np.mean(mean_split_importance)
+                        ),
+                        f"stability/seed_{_seed}/est_{_est_idx}_split_imp_dist": wandb.Histogram(
+                            mean_split_importance
+                        ),
+                    }
+                )
 
             combined_score = (
                 permutation_weight * normalized_perm_importance
@@ -925,9 +955,7 @@ def run_stability_selection(
     report = report.sort("ranking_score", descending=True)
 
     selected_features = (
-        report.filter(pl.col("stability") >= min_stability)
-        .get_column("feature")
-        .to_list()
+        report.filter(pl.col("stability") >= min_stability).get_column("feature").to_list()
     )
 
     # Required fallback behavior.
@@ -954,5 +982,17 @@ def run_stability_selection(
         min_fallback_features,
         candidate_cap,
     )
+
+    if wandb.run is not None:
+        wandb.log(
+            {
+                "stability/ranking_score_dist": wandb.Histogram(
+                    report.get_column("ranking_score").to_numpy()
+                ),
+                "stability/selected_feature_count": len(selected_features),
+                "stability/total_feature_count": len(feature_columns),
+                "stability/report_table": wandb.Table(dataframe=report.to_pandas()),
+            }
+        )
 
     return selected_features, report, scores_dict

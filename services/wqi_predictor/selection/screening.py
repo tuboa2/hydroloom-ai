@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import polars as pl
+
+import wandb
 
 from ..config import (
     DAY_INDEX_COLUMN,
@@ -32,6 +35,7 @@ LEAKAGE_IDENTIFIER_COLUMNS = frozenset(
     }
 )
 
+
 def _feature_priority(column: str) -> int:
     if column in REQUIRED_FEATURES:
         return 0
@@ -39,10 +43,11 @@ def _feature_priority(column: str) -> int:
     family = infer_feature_family(column)
     return FAMILY_PRIORITY.get(family, 100)
 
+
 def _choose_collinear_drop(left: str, right: str) -> str:
     left_priority = _feature_priority(left)
     right_priority = _feature_priority(right)
-    
+
     if left_priority > right_priority:
         return left
 
@@ -50,6 +55,7 @@ def _choose_collinear_drop(left: str, right: str) -> str:
         return right
 
     return max(left, right)
+
 
 def run_screening(
     x_train: pl.DataFrame,
@@ -63,6 +69,9 @@ def run_screening(
         feature_columns = list(feature_columns)
 
     logger.info("Running feature screening on %d candidates.", len(feature_columns))
+
+    if wandb.run is not None:
+        wandb.log({"screening/input_count": len(feature_columns)})
 
     dropped_leakage: list[str] = []
     dropped_missingness: list[str] = []
@@ -87,6 +96,14 @@ def run_screening(
 
         retained_after_leakage.append(column)
 
+    if wandb.run is not None:
+        wandb.log(
+            {
+                "screening/retained_count": len(retained_after_leakage),
+                "screening/dropped_leakage_count": len(dropped_leakage),
+            }
+        )
+
     retained_after_missingness: list[str] = []
 
     for column in retained_after_leakage:
@@ -97,6 +114,14 @@ def run_screening(
             continue
 
         retained_after_missingness.append(column)
+
+    if wandb.run is not None:
+        wandb.log(
+            {
+                "screening/retained_count": len(retained_after_missingness),
+                "screening/dropped_missingness_count": len(dropped_missingness),
+            }
+        )
 
     retained_after_zero_variance: list[str] = []
 
@@ -129,10 +154,16 @@ def run_screening(
 
         retained_after_zero_variance.append(column)
 
+    if wandb.run is not None:
+        wandb.log(
+            {
+                "screening/retained_count": len(retained_after_zero_variance),
+                "screening/dropped_zero_variance_count": len(dropped_zero_variance),
+            }
+        )
+
     numeric_columns = [
-        column
-        for column in retained_after_zero_variance
-        if x_train[column].dtype.is_numeric()
+        column for column in retained_after_zero_variance if x_train[column].dtype.is_numeric()
     ]
 
     collinear_drop_set: set[str] = set()
@@ -140,9 +171,7 @@ def run_screening(
     if len(numeric_columns) > 1:
         numeric_frame = x_train[numeric_columns].clone()
         medians = numeric_frame.median()
-        numeric_frame = numeric_frame.with_columns(
-            pl.all().fill_null(pl.all().median())
-        )
+        numeric_frame = numeric_frame.with_columns(pl.all().fill_null(pl.all().median()))
 
         correlation = numeric_frame.corr().select(pl.all().abs())
 
@@ -172,10 +201,16 @@ def run_screening(
     dropped_collinearity = sorted(collinear_drop_set)
 
     retained_final = [
-        column
-        for column in retained_after_zero_variance
-        if column not in collinear_drop_set
+        column for column in retained_after_zero_variance if column not in collinear_drop_set
     ]
+
+    if wandb.run is not None:
+        wandb.log(
+            {
+                "screening/retained_count": len(retained_final),
+                "screening/dropped_collinearity_count": len(dropped_collinearity),
+            }
+        )
 
     report: dict[str, Any] = {
         "input_features": feature_columns,
@@ -208,5 +243,22 @@ def run_screening(
         len(dropped_collinearity),
     )
 
-    return retained_final, report  
-            
+    if wandb.run is not None:
+        dropped_records = []
+        for stage, features in report["dropped"].items():
+            for feature in features:
+                dropped_records.append([stage, feature])
+
+        dropped_table = wandb.Table(columns=["Stage", "Feature"], data=dropped_records)
+        wandb.log({"screening/dropped_summary_table": dropped_table})
+
+        collinear_records = [
+            [p["feature_a"], p["feature_b"], p["abs_correlation"], p["dropped"]]
+            for p in collinear_pairs
+        ]
+        collinear_table = wandb.Table(
+            columns=["feature_a", "feature_b", "abs_correlation", "dropped"], data=collinear_records
+        )
+        wandb.log({"screening/collinear_pairs_table": collinear_table})
+
+    return retained_final, report

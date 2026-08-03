@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 import numpy as np
 import polars as pl
@@ -14,6 +15,8 @@ from joblib import Parallel, delayed, effective_n_jobs
 from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor  # noqa: F401
 from sklearn.metrics import mean_squared_error
 from sklearn.pipeline import Pipeline  # noqa: F401
+
+import wandb
 
 from ..preprocess.feature_groups import (
     RAW_CLUSTER_FEATURES,
@@ -91,10 +94,7 @@ def apply_cluster_feature_gate(
     """
     selected = list(dict.fromkeys(selected_features))
     available_set = set(available_features)
-
-    raw_present = [
-        column for column in RAW_CLUSTER_FEATURES if column in available_set
-    ]
+    raw_present = [column for column in RAW_CLUSTER_FEATURES if column in available_set]
 
     if not raw_present:
         return ClusterGateResult(
@@ -111,13 +111,10 @@ def apply_cluster_feature_gate(
         )
 
     raw_permutation_importance = {
-        column: float(permutation_importances.get(column, 0.0))
-        for column in raw_present
+        column: float(permutation_importances.get(column, 0.0)) for column in raw_present
     }
 
-    all_raw_non_positive = all(
-        value <= 0.0 for value in raw_permutation_importance.values()
-    )
+    all_raw_non_positive = all(value <= 0.0 for value in raw_permutation_importance.values())
 
     if not all_raw_non_positive:
         return ClusterGateResult(
@@ -134,9 +131,7 @@ def apply_cluster_feature_gate(
 
     raw_set = set(raw_present)
 
-    share_present = [
-        column for column in CLUSTER_SHARE_FEATURES if column in available_set
-    ]
+    share_present = [column for column in CLUSTER_SHARE_FEATURES if column in available_set]
 
     strongest_candidates = share_present if share_present else raw_present
     strongest_cluster_feature: str | None = None
@@ -159,22 +154,14 @@ def apply_cluster_feature_gate(
     if strongest_cluster_feature is not None:
         enforced_features.append(strongest_cluster_feature)
 
-    raw_readded = (
-        strongest_cluster_feature
-        if strongest_cluster_feature in raw_set
-        else None
-    )
+    raw_readded = strongest_cluster_feature if strongest_cluster_feature in raw_set else None
 
-    selected_without_raw = [
-        column for column in selected if column not in raw_set
-    ]
+    selected_without_raw = [column for column in selected if column not in raw_set]
 
     gated_features = list(dict.fromkeys(selected_without_raw + enforced_features))
 
     dropped_raw_features = [
-        column
-        for column in selected
-        if column in raw_set and column != raw_readded
+        column for column in selected if column in raw_set and column != raw_readded
     ]
 
     report: dict[str, Any] = {
@@ -185,9 +172,7 @@ def apply_cluster_feature_gate(
         "dropped_raw_features": dropped_raw_features,
         "enforced_features": enforced_features,
         "strongest_cluster_feature": strongest_cluster_feature,
-        "retained_raw_cluster_features": (
-            [raw_readded] if raw_readded is not None else []
-        ),
+        "retained_raw_cluster_features": ([raw_readded] if raw_readded is not None else []),
     }
 
     return ClusterGateResult(
@@ -564,20 +549,14 @@ def _evaluate_pretransformed_rmse(
     if not candidate_features:
         return float("inf")
 
-    if (
-        hasattr(x_train_transformed, "columns")
-        and hasattr(x_val_transformed, "columns")
-    ):
+    if hasattr(x_train_transformed, "columns") and hasattr(x_val_transformed, "columns"):
         X_train = _as_float32_c_array(x_train_transformed[candidate_features])
         X_val = _as_float32_c_array(x_val_transformed[candidate_features])
     else:
         X_train = _as_float32_c_array(x_train_transformed)
         X_val = _as_float32_c_array(x_val_transformed)
 
-        if (
-            X_train.shape[1] != len(candidate_features)
-            or X_val.shape[1] != len(candidate_features)
-        ):
+        if X_train.shape[1] != len(candidate_features) or X_val.shape[1] != len(candidate_features):
             raise KeyError(
                 "Array-like transformed inputs require explicit feature names "
                 "or a column count matching candidate_features."
@@ -659,9 +638,7 @@ def enforce_feature_cap(
     """
     feature_columns = list(feature_columns)
 
-    required_present = [
-        column for column in required_columns if column in feature_columns
-    ]
+    required_present = [column for column in required_columns if column in feature_columns]
 
     if feature_cap <= 0:
         return []
@@ -669,9 +646,7 @@ def enforce_feature_cap(
     if len(required_present) >= feature_cap:
         return required_present[:feature_cap]
 
-    remaining = [
-        column for column in feature_columns if column not in required_present
-    ]
+    remaining = [column for column in feature_columns if column not in required_present]
 
     remaining = sorted(
         remaining,
@@ -695,6 +670,7 @@ def _evaluate_family_ablation_task(
     baseline_rmse: float,
     min_relative_improvement: float,
     random_state: int,
+    ablation_step_counter: list[int] | None = None,
 ) -> tuple[str, int, float, float, bool, bool, bool]:
     """
     Evaluate one family-ablation candidate.
@@ -726,12 +702,23 @@ def _evaluate_family_ablation_task(
     )
 
     relative_change = (
-        (baseline_rmse - ablation_rmse) / baseline_rmse
-        if baseline_rmse > 0.0
-        else 0.0
+        (baseline_rmse - ablation_rmse) / baseline_rmse if baseline_rmse > 0.0 else 0.0
     )
 
     dropped = relative_change >= min_relative_improvement
+
+    if wandb.run is not None and ablation_step_counter is not None:
+        ablation_step_counter.append(1)
+        wandb.log(
+            {
+                "ablation/step": len(ablation_step_counter),
+                "ablation/tested_family": family,
+                "ablation/family_feature_count": count,
+                "ablation/family_rmse": ablation_rmse,
+                "ablation/relative_rmse_change": relative_change,
+                "ablation/family_dropped": int(dropped),
+            }
+        )
 
     return family, count, ablation_rmse, relative_change, protected, True, dropped
 
@@ -786,9 +773,7 @@ def run_family_ablation(
         )
         return [], empty_report, float("inf"), float("inf"), []
 
-    family_by_feature = {
-        column: infer_feature_family(column) for column in feature_columns
-    }
+    family_by_feature = {column: infer_feature_family(column) for column in feature_columns}
 
     families = sorted(set(family_by_feature.values()))
 
@@ -802,23 +787,19 @@ def run_family_ablation(
     feature_set = set(feature_columns)
 
     protected_families = {
-        family_by_feature[column]
-        for column in required_columns
-        if column in feature_set
+        family_by_feature[column] for column in required_columns if column in feature_set
     }
 
     resolved_random_state = _resolve_random_state(random_state)
 
-    X_train, y_train_arr, X_val, y_val_arr, transformed_names = (
-        _prepare_transformed_matrices(
-            x_train=x_train,
-            y_train=y_train,
-            x_val=x_val,
-            y_val=y_val,
-            feature_columns=feature_columns,
-            random_state=resolved_random_state,
-            max_eval_samples=max_eval_samples,
-        )
+    X_train, y_train_arr, X_val, y_val_arr, transformed_names = _prepare_transformed_matrices(
+        x_train=x_train,
+        y_train=y_train,
+        x_val=x_val,
+        y_val=y_val,
+        feature_columns=feature_columns,
+        random_state=resolved_random_state,
+        max_eval_samples=max_eval_samples,
     )
 
     baseline_rmse = _rmse_for_indices(
@@ -830,13 +811,12 @@ def run_family_ablation(
         random_state=resolved_random_state,
     )
 
-    feature_index = {
-        name: index for index, name in enumerate(transformed_names)
-    }
+    if wandb.run is not None:
+        wandb.log({"ablation/baseline_rmse": baseline_rmse})
 
-    raw_position = {
-        name: index for index, name in enumerate(feature_columns)
-    }
+    feature_index = {name: index for index, name in enumerate(transformed_names)}
+
+    raw_position = {name: index for index, name in enumerate(feature_columns)}
 
     use_positional_fallback = len(transformed_names) == len(feature_columns)
 
@@ -860,9 +840,7 @@ def run_family_ablation(
 
     for family in families:
         candidate_features = [
-            column
-            for column in feature_columns
-            if family_by_feature[column] != family
+            column for column in feature_columns if family_by_feature[column] != family
         ]
 
         candidate_indices = _indices_for_features(candidate_features)
@@ -876,10 +854,10 @@ def run_family_ablation(
     outer_jobs = _resolve_outer_jobs(n_jobs)
 
     evaluable_task_count = sum(
-        1
-        for _, candidate_indices, protected in tasks
-        if candidate_indices and not protected
+        1 for _, candidate_indices, protected in tasks if candidate_indices and not protected
     )
+
+    ablation_step_counter: list[int] = []
 
     if outer_jobs <= 1 or evaluable_task_count <= 1:
         results = [
@@ -894,6 +872,7 @@ def run_family_ablation(
                 baseline_rmse=baseline_rmse,
                 min_relative_improvement=min_relative_improvement,
                 random_state=resolved_random_state,
+                ablation_step_counter=ablation_step_counter,
             )
             for family, candidate_indices, protected in tasks
         ]
@@ -915,6 +894,7 @@ def run_family_ablation(
                 baseline_rmse=baseline_rmse,
                 min_relative_improvement=min_relative_improvement,
                 random_state=resolved_random_state,
+                ablation_step_counter=ablation_step_counter,
             )
             for family, candidate_indices, protected in tasks
         )
@@ -947,9 +927,7 @@ def run_family_ablation(
     dropped_set = set(dropped_families)
 
     retained_features = [
-        column
-        for column in feature_columns
-        if family_by_feature[column] not in dropped_set
+        column for column in feature_columns if family_by_feature[column] not in dropped_set
     ]
 
     if not retained_features:
@@ -988,5 +966,14 @@ def run_family_ablation(
         final_rmse,
         dropped_families,
     )
+
+    if wandb.run is not None:
+        wandb.log(
+            {
+                "ablation/final_rmse": final_rmse,
+                "ablation/dropped_families_count": len(dropped_families),
+                "ablation/report_table": wandb.Table(dataframe=report.to_pandas()),
+            }
+        )
 
     return final_features, report, final_rmse, baseline_rmse, dropped_families
