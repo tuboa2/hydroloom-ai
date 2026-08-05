@@ -8,6 +8,7 @@ dependencies = [
     "mlflow>=3.14.0",
     "numba>=0.66.0",
     "numpy>=2.4.6",
+    "orjson>=3.11.9",
     "pandas>=2.2.0,<3.0.0",
     "polars>=1.41.2",
     "pyarrow>=24.0.0",

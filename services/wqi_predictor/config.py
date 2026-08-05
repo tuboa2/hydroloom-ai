@@ -1,5 +1,6 @@
 from __future__ import annotations
-import os
+
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Final
 
@@ -55,19 +56,10 @@ EXPECTED_SCHEMA: Final[tuple[str, ...]] = (
 REQUIRED_COLUMNS: Final[frozenset[str]] = frozenset(EXPECTED_SCHEMA)
 
 LEAKAGE_BLACKLIST: Final[frozenset[str]] = frozenset(
-    {
-        HEMISPHERE_COLUMN,
-        DAY_INDEX_COLUMN,
-        YEAR_INDEX_COLUMN
-    }
+    {HEMISPHERE_COLUMN, DAY_INDEX_COLUMN, YEAR_INDEX_COLUMN}
 )
 
-EVIDENCE_EXCLUSIONS: Final[frozenset[str]] = frozenset(
-    {
-        "is_weekend",
-        "holiday_weekend_flag"
-    }
-)
+EVIDENCE_EXCLUSIONS: Final[frozenset[str]] = frozenset({"is_weekend", "holiday_weekend_flag"})
 
 FEATURE_EXCLUSIONS: Final[frozenset[str]] = frozenset(
     LEAKAGE_BLACKLIST | EVIDENCE_EXCLUSIONS | {TARGET_COLUMN}
@@ -150,3 +142,95 @@ SOUTH_DEFAULT_EXCLUSIONS: frozenset[str] = frozenset(
     }
 )
 
+MODEL_CONFIG = {
+    "random_state": RANDOM_STATE,
+    "target_column": TARGET_COLUMN,
+    "prediction_clip_min": 0.0,
+    "prediction_clip_max": 100.0,
+    "primary_metric": "rmse",
+    "scientific_metric": "nse",
+    "test_set_policy": "untouched",
+}
+
+CV_CONFIG = {
+    "n_splits": 5,
+    "gap_primary": 0,
+    "gap_robustness": 7,
+    "shuffle": False,
+}
+
+OPTUNA_CONFIG = {
+    "sampler": "TPE",
+    "sampler_seed": 42,
+    "pruner": "MedianPruner",
+    "n_startup_trials": 15,
+    "n_warmup_steps": 3,
+    "direction": "minimize",
+    "storage": "sqlite:///artifacts/model/optuna/hydromind_model.db",
+}
+
+EARLY_STOPPING_ROUNDS: int = 100
+
+FORBIDDEN_FEATURES = frozenset(
+    {
+        HEMISPHERE_COLUMN,
+        DAY_INDEX_COLUMN,
+        YEAR_INDEX_COLUMN,
+        TARGET_COLUMN,
+    }
+)
+
+CATEGORICAL_FEATURES = frozenset(
+    {
+        "season_label",
+        "tiered_pricing_regime",
+    }
+)
+
+PASSTHROUGH_FEATURES = frozenset(
+    {
+        "watering_ban_active",
+        "is_weekend",
+        "holiday_weekend_flag",
+    }
+)
+
+STANDARD_FEATURES = frozenset(
+    {
+        "daily_max_temp_celsius",
+        "temp_anomaly_celsius",
+        "cumulative_heat_index",
+        "seasonal_wqi_mean_doy",
+        "seasonal_wqi_median_doy",
+        "seasonal_wqi_std_doy",
+    }
+)
+
+POWER_FEATURES = frozenset(
+    {
+        "daily_rainfall_mm",
+        "rolling_7d_rainfall_mm",
+        "cumulative_storm_rainfall_mm",
+        "daily_runoff_volume_m3",
+        "total_suspended_solids_mg_L",
+        "nutrient_load_index",
+        "heat_x_nutrient_synergy",
+        "drought_x_heat_stress",
+        "demand_x_runoff_pressure",
+        "rainfall_x_antecedent_moisture",
+        "storm_rainfall_x_tss",
+        "runoff_x_tss",
+        "temp_anomaly_x_nutrient_load",
+        "heat_x_dry_days",
+        "rolling_rain_x_nutrient_load",
+        "runoff_x_nutrient_load",
+        "heat_x_runoff",
+    }
+)
+
+_FAMILY_ABBREVIATIONS: Mapping[str, str] = {
+    "xgboost": "xgb",
+    "lightgbm": "lgbm",
+    "catboost": "catboost",
+    "linear": "linear",
+}
