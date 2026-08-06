@@ -14,7 +14,7 @@ def _prepare_arrays(
     y_true: Array,
     y_pred: Array,
 ) -> tuple[Array, Array]:
-    # flatten and validate prediction/target arrays
+    # flatten and validate arrays, explicitly avoiding copies if already float32
     y_true_arr = np.asarray(y_true, dtype=np.float32).ravel()
     y_pred_arr = np.asarray(y_pred, dtype=np.float32).ravel()
 
@@ -37,9 +37,11 @@ def _rmse_value(
     if y_true_arr.size == 0:
         return 0.0
 
-    diff = y_pred_arr - y_true_arr
+    # In-place mathematical reduction
+    diff = np.subtract(y_pred_arr, y_true_arr)
+    np.square(diff, out=diff)
 
-    return float(np.sqrt(np.mean(np.square(diff))))
+    return float(np.sqrt(np.mean(diff)))
 
 
 def log_cosh_loss(
@@ -52,11 +54,16 @@ def log_cosh_loss(
     if y_true_arr.size == 0:
         return 0.0
 
-    diff = y_pred_arr - y_true_arr
+    # Brutal Memory Optimization: Reusing the same memory buffer
+    diff = np.subtract(y_pred_arr, y_true_arr)
 
     # stable log(cosh(x)) = log1p(exp(-2|x|)) + |x| - log(2)
-    abs_diff = np.abs(diff)
-    loss = np.log1p(np.exp(-2.0 * abs_diff)) + abs_diff - np.log(2.0)
+    abs_diff = np.abs(diff, out=diff)
+
+    loss = np.exp(-2.0 * abs_diff)
+    np.log1p(loss, out=loss)
+    np.add(loss, abs_diff, out=loss)
+    np.subtract(loss, np.log(2.0), out=loss)
 
     return float(np.mean(loss))
 
@@ -68,9 +75,14 @@ def log_cosh_objective_xgb(
     # log-cosh gradient/hessian objective
     y_true_arr, y_pred_arr = _prepare_arrays(y_true, y_pred)
 
-    diff = y_pred_arr - y_true_arr
-    gradient = np.tanh(diff)
-    hessian = np.maximum(1.0 - np.square(gradient), EPSILON)
+    # In-place gradient calculation avoids creating intermediate arrays
+    gradient = np.subtract(y_pred_arr, y_true_arr)
+    np.tanh(gradient, out=gradient)
+
+    # In-place hessian calculation
+    hessian = np.square(gradient)
+    np.subtract(1.0, hessian, out=hessian)
+    np.maximum(hessian, EPSILON, out=hessian)
 
     return gradient, hessian
 
@@ -94,21 +106,17 @@ def huber_objective_xgb(
 
     y_true_arr, y_pred_arr = _prepare_arrays(y_true, y_pred)
 
-    diff = y_pred_arr - y_true_arr
-    abs_diff = np.abs(diff)
+    # Mathematical abstraction: Huber gradient is exactly equivalent to clipping
+    diff = np.subtract(y_pred_arr, y_true_arr)
 
-    gradient = np.where(
-        abs_diff <= delta,
-        diff,
-        delta * np.sign(diff),
-    )
-    hessian = np.where(
-        abs_diff <= delta,
-        1.0,
-        EPSILON,
-    )
+    # Executes in a single C-level native loop, drastically faster than np.where
+    gradient = np.clip(diff, -delta, delta)
 
-    return gradient.astype(np.float32), hessian.astype(np.float32)
+    # Calculate hessian without allocating an np.abs array
+    hessian = np.full_like(diff, EPSILON, dtype=np.float32)
+    hessian[(diff >= -delta) & (diff <= delta)] = 1.0
+
+    return gradient, hessian
 
 
 def huber_objective_lgbm(
@@ -131,15 +139,19 @@ def quantile_objective_xgb(
 
     y_true_arr, y_pred_arr = _prepare_arrays(y_true, y_pred)
 
+    # Force 32-bit scalars to prevent np.where from upcasting memory to 64-bit
+    neg_alpha = np.float32(-alpha)
+    pos_alpha = np.float32(1.0 - alpha)
+
     gradient = np.where(
         y_pred_arr < y_true_arr,
-        -alpha,
-        1.0 - alpha,
+        neg_alpha,
+        pos_alpha,
     )
 
     hessian = np.full_like(gradient, fill_value=EPSILON, dtype=np.float32)
 
-    return gradient.astype(np.float32), hessian
+    return gradient, hessian
 
 
 def rmse_eval_lgbm(
