@@ -83,8 +83,11 @@ def train_xgboost_fold(
     x_train = np.ascontiguousarray(x_train, dtype=np.float32)
     x_val = np.ascontiguousarray(x_val, dtype=np.float32)
 
-    dtrain = xgb.QuantileDMatrix(x_train, label=y_train, nthread=-1)
-    dval = xgb.QuantileDMatrix(x_val, label=y_val, ref=dtrain, nthread=-1)
+    y_train = np.ascontiguousarray(y_train, dtype=np.float64)
+    y_val = np.ascontiguousarray(y_val, dtype=np.float64)
+
+    dtrain = xgb.DMatrix(x_train, label=y_train, nthread=-1)
+    dval = xgb.DMatrix(x_val, label=y_val, ref=dtrain, nthread=-1)
 
     xgb_params = _xgb_train_params(params, loss_name)
     objective, eval_metric = _objective_and_eval(loss_name, params)
@@ -121,8 +124,9 @@ def train_xgboost_full(
     num_boost_round: int,
 ) -> xgb.Booster:
     x_train = np.ascontiguousarray(x_train, dtype=np.float32)
+    y_train = np.ascontiguousarray(y_train, dtype=np.float64)
 
-    dtrain = xgb.QuantileDMatrix(x_train, label=y_train, nthread=-1)
+    dtrain = xgb.DMatrix(x_train, label=y_train, nthread=-1)
 
     xgb_params = _xgb_train_params(params, loss_name)
     objective, eval_metric = _objective_and_eval(loss_name, params)

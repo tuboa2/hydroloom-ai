@@ -32,7 +32,6 @@ def _lgbm_train_params(params: dict[str, Any], loss_name: str) -> dict[str, Any]
         "num_threads": int(params.get("n_jobs", -1)),
         "seed": int(params.get("random_state", RANDOM_STATE)),
         "verbose": -1,
-        "max_bin": 255,
     }
 
     loss = loss_name.lower()
@@ -77,6 +76,9 @@ def train_lightgbm_fold(
 ) -> tuple[lgb.Booster, int]:
     x_train = np.ascontiguousarray(x_train, dtype=np.float32)
     x_val = np.ascontiguousarray(x_val, dtype=np.float32)
+
+    y_train = np.ascontiguousarray(y_train, dtype=np.float64)
+    y_val = np.ascontiguousarray(y_val, dtype=np.float64)
 
     train_set = lgb.Dataset(x_train, label=y_train, free_raw_data=True)
     val_set = lgb.Dataset(x_val, label=y_val, reference=train_set, free_raw_data=True)
@@ -125,6 +127,8 @@ def train_lightgbm_full(
 ) -> lgb.Booster:
 
     x_train = np.ascontiguousarray(x_train, dtype=np.float32)
+    y_train = np.ascontiguousarray(y_train, dtype=np.float64)
+        
     train_set = lgb.Dataset(x_train, label=y_train, free_raw_data=True)
 
     lgbm_params = _lgbm_train_params(params, loss_name)

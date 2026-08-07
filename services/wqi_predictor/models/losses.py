@@ -14,9 +14,9 @@ def _prepare_arrays(
     y_true: Array,
     y_pred: Array,
 ) -> tuple[Array, Array]:
-    # flatten and validate arrays, explicitly avoiding copies if already float32
-    y_true_arr = np.asarray(y_true, dtype=np.float32).ravel()
-    y_pred_arr = np.asarray(y_pred, dtype=np.float32).ravel()
+    # flatten and validate arrays, explicitly avoiding copies if already float64
+    y_true_arr = np.asarray(y_true, dtype=np.float64).ravel()
+    y_pred_arr = np.asarray(y_pred, dtype=np.float64).ravel()
 
     if y_true_arr.shape != y_pred_arr.shape:
         raise ValueError(
@@ -113,7 +113,7 @@ def huber_objective_xgb(
     gradient = np.clip(diff, -delta, delta)
 
     # Calculate hessian without allocating an np.abs array
-    hessian = np.full_like(diff, EPSILON, dtype=np.float32)
+    hessian = np.full_like(diff, EPSILON, dtype=np.float64)
     hessian[(diff >= -delta) & (diff <= delta)] = 1.0
 
     return gradient, hessian
@@ -140,8 +140,8 @@ def quantile_objective_xgb(
     y_true_arr, y_pred_arr = _prepare_arrays(y_true, y_pred)
 
     # Force 32-bit scalars to prevent np.where from upcasting memory to 64-bit
-    neg_alpha = np.float32(-alpha)
-    pos_alpha = np.float32(1.0 - alpha)
+    neg_alpha = np.float64(-alpha)
+    pos_alpha = np.float64(1.0 - alpha)
 
     gradient = np.where(
         y_pred_arr < y_true_arr,
@@ -149,7 +149,7 @@ def quantile_objective_xgb(
         pos_alpha,
     )
 
-    hessian = np.full_like(gradient, fill_value=EPSILON, dtype=np.float32)
+    hessian = np.full_like(gradient, fill_value=EPSILON, dtype=np.float64)
 
     return gradient, hessian
 

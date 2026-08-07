@@ -1,54 +1,56 @@
 from __future__ import annotations
 
-import re
 import functools
 import hashlib
 import logging
-
-from pathlib import Path
+import re
 from collections import Counter, defaultdict
+from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Union
+from pathlib import Path
+from typing import Any
 
 import joblib
-import orjson
 import numpy as np
+import orjson
 import polars as pl
-
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OrdinalEncoder, PowerTransformer, RobustScaler, StandardScaler
 
 from ..config import (
-    MODEL_CONFIG,
-    FORBIDDEN_FEATURES,
-    CATEGORICAL_FEATURES,
-    PASSTHROUGH_FEATURES,
-    STANDARD_FEATURES,
-    POWER_FEATURES,
     _FAMILY_ABBREVIATIONS,
+    CATEGORICAL_FEATURES,
+    FORBIDDEN_FEATURES,
+    MODEL_CONFIG,
+    PASSTHROUGH_FEATURES,
+    POWER_FEATURES,
+    STANDARD_FEATURES,
 )
 
 _IO_POOL = ThreadPoolExecutor(max_workers=4)
 
 logger = logging.getLogger(__name__)
 
-ENGINEERED_PATTERN = re.compile(
-    r"_(?:diff|zscore|roll_mean|roll_std|roll_min|roll_max|lag|ewm_)"
-)
+ENGINEERED_PATTERN = re.compile(r"_(?:diff|zscore|roll_mean|roll_std|roll_min|roll_max|lag|ewm_)")
+
 
 class ModelError(RuntimeError):
-     """Base exception for Model failures."""
+    """Base exception for Model failures."""
+
 
 class FeatureContractError(ModelError):
     """Raised when frozen feature contract validation fails."""
 
+
 class ArtifactError(ModelError):
     """Raised when required artifacts are missing or invalid."""
+
 
 def ensure_dir(path: str | Path) -> Path:
     resolved = Path(path)
     resolved.mkdir(parents=True, exist_ok=True)
     return resolved
+
 
 def _json_default(obj: Any) -> Any:
     if isinstance(obj, (set, frozenset)):
@@ -67,6 +69,7 @@ def _json_default(obj: Any) -> Any:
 
     return str(obj)
 
+
 def write_json(path: str | Path, payload: Any) -> Path:
     resolved = Path(path)
     ensure_dir(resolved.parent)
@@ -78,8 +81,9 @@ def write_json(path: str | Path, payload: Any) -> Path:
             option=orjson.OPT_INDENT_2 | orjson.OPT_SERIALIZE_NUMPY,
         )
     )
-    
+
     return resolved
+
 
 def read_json(path: str | Path) -> Any:
     resolved = Path(path)
@@ -89,11 +93,12 @@ def read_json(path: str | Path) -> Any:
 
     return orjson.loads(resolved.read_bytes())
 
+
 def clip_predictions(y_pred: np.ndarray | Sequence[float]) -> np.ndarray:
     c_min = float(MODEL_CONFIG["prediction_clip_min"])
     c_max = float(MODEL_CONFIG["prediction_clip_max"])
 
-    arr = np.array(y_pred, dtype=np.float32, copy=True).ravel()
+    arr = np.asarray(y_pred, dtype=np.float64).ravel()
 
     if not np.all(np.isfinite(arr)):
         logger.warning("Non-finite predictions detected. Replacing with finite bounds.")
@@ -103,6 +108,7 @@ def clip_predictions(y_pred: np.ndarray | Sequence[float]) -> np.ndarray:
 
     return arr
 
+
 def validate_feature_contract(
     x_train: pl.DataFrame,
     x_val: pl.DataFrame,
@@ -111,7 +117,9 @@ def validate_feature_contract(
     if x_train is None or x_val is None:
         raise FeatureContractError("x_train and x_val must be provided.")
 
-    features = list(selected_features) if not isinstance(selected_features, list) else selected_features
+    features = (
+        list(selected_features) if not isinstance(selected_features, list) else selected_features
+    )
     if not features:
         raise FeatureContractError("Selected feature list is empty.")
 
@@ -145,20 +153,26 @@ def validate_feature_contract(
 
     return features
 
+
 def hash_features(feature_columns: Sequence[str], sort: bool = True) -> str:
     hasher = hashlib.sha256()
-    
+
     cols = sorted(feature_columns) if sort else feature_columns
 
     for col in cols:
         hasher.update(col.encode("utf-8"))
-        hasher.update(b"\x00")  
-        
+        hasher.update(b"\x00")
+
     return hasher.hexdigest()
+
 
 @functools.lru_cache(maxsize=8192)
 def _feature_kind(feature_name: str) -> str:
-    name = feature_name.strip() if feature_name.startswith(" ") or feature_name.endswith(" ") else feature_name
+    name = (
+        feature_name.strip()
+        if feature_name.startswith(" ") or feature_name.endswith(" ")
+        else feature_name
+    )
 
     if name in CATEGORICAL_FEATURES:
         return "categorical"
@@ -170,6 +184,7 @@ def _feature_kind(feature_name: str) -> str:
         return "power"
 
     return "robust"
+
 
 def build_fold_preprocessor(feature_columns: Sequence[str]) -> ColumnTransformer:
     if not feature_columns:
@@ -188,25 +203,29 @@ def build_fold_preprocessor(feature_columns: Sequence[str]) -> ColumnTransformer
         transformers.append(("num_robust", RobustScaler(), rob_cols))
 
     if pwr_cols := groups.get("power"):
-        transformers.append((
-            "num_power",
-            PowerTransformer(method="yeo-johnson", standardize=True),
-            pwr_cols,
-        ))
+        transformers.append(
+            (
+                "num_power",
+                PowerTransformer(method="yeo-johnson", standardize=True),
+                pwr_cols,
+            )
+        )
 
     if pass_cols := groups.get("passthrough"):
         transformers.append(("num_passthrough", "passthrough", pass_cols))
 
     if cat_cols := groups.get("categorical"):
-        transformers.append((
-            "cat_ordinal",
-            OrdinalEncoder(
-                handle_unknown="use_encoded_value",
-                unknown_value=-1,
-                dtype=np.float32,
-            ),
-            cat_cols,
-        ))
+        transformers.append(
+            (
+                "cat_ordinal",
+                OrdinalEncoder(
+                    handle_unknown="use_encoded_value",
+                    unknown_value=-1,
+                    dtype=np.float32,
+                ),
+                cat_cols,
+            )
+        )
 
     if not transformers:
         raise ModelError("No preprocessing transformers were constructed.")
@@ -218,6 +237,7 @@ def build_fold_preprocessor(feature_columns: Sequence[str]) -> ColumnTransformer
         verbose_feature_names_out=False,
     )
 
+
 @functools.lru_cache(maxsize=256)
 def make_study_name(hemisphere: str, model_family: str, loss_name: str) -> str:
     fam_lower = model_family.lower()
@@ -226,6 +246,7 @@ def make_study_name(hemisphere: str, model_family: str, loss_name: str) -> str:
 
     return f"model-{hemisphere.lower()}-{family}-{loss}"
 
+
 @functools.lru_cache(maxsize=256)
 def make_candidate_dirname(model_family: str, loss_name: str) -> str:
     fam_lower = model_family.lower()
@@ -233,6 +254,7 @@ def make_candidate_dirname(model_family: str, loss_name: str) -> str:
     loss = "diversity" if fam_lower == "linear" else loss_name.lower()
 
     return f"{family}_{loss}"
+
 
 def save_candidate_artifacts(
     candidate_dir: str | Path,
@@ -249,9 +271,7 @@ def save_candidate_artifacts(
     futures = []
 
     futures.append(
-        _IO_POOL.submit(
-            joblib.dump, model, resolved_dir / "model.joblib", compress=("zstd", 3)
-        )
+        _IO_POOL.submit(joblib.dump, model, resolved_dir / "model.joblib", compress=("zstd", 3))
     )
     futures.append(
         _IO_POOL.submit(
@@ -259,12 +279,8 @@ def save_candidate_artifacts(
         )
     )
 
-    futures.append(
-        _IO_POOL.submit(write_json, resolved_dir / "best_params.json", best_params)
-    )
-    futures.append(
-        _IO_POOL.submit(write_json, resolved_dir / "val_metrics.json", val_metrics)
-    )
+    futures.append(_IO_POOL.submit(write_json, resolved_dir / "best_params.json", best_params))
+    futures.append(_IO_POOL.submit(write_json, resolved_dir / "val_metrics.json", val_metrics))
 
     cv_path = resolved_dir / "cv_metrics.csv"
     if cv_metrics is not None:
@@ -273,23 +289,20 @@ def save_candidate_artifacts(
         futures.append(_IO_POOL.submit(cv_path.write_bytes, b"fold,rmse\n"))
 
     if report_card is not None:
-        futures.append(
-            _IO_POOL.submit(write_json, resolved_dir / "report_card.json", report_card)
-        )
+        futures.append(_IO_POOL.submit(write_json, resolved_dir / "report_card.json", report_card))
 
     if extra_metadata is not None:
         futures.append(
-            _IO_POOL.submit(
-                write_json, resolved_dir / "candidate_metadata.json", extra_metadata
-            )
+            _IO_POOL.submit(write_json, resolved_dir / "candidate_metadata.json", extra_metadata)
         )
 
     for future in futures:
         future.result()
 
     logger.info("Saved candidate artifacts to %s", resolved_dir)
-    
+
     return resolved_dir
+
 
 def load_candidate_artifacts(
     candidate_dir: str | Path,
@@ -332,4 +345,3 @@ def load_candidate_artifacts(
         payload[key] = future.result()
 
     return payload
-    
