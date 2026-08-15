@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import sys
 from logging.handlers import RotatingFileHandler
-from pathlib import Path
 from typing import Final
 
 from ..config import LOG_DIR
@@ -66,8 +65,7 @@ def get_logger(name: str) -> logging.Logger:
         # If the log directory is not writable (e.g. CI, read-only fs),
         # fall back to console-only logging without failing.
         logger.warning(
-            "Could not create rotating file handler at %s — "
-            "falling back to console-only logging.",
+            "Could not create rotating file handler at %s — falling back to console-only logging.",
             LOG_DIR / _LOG_FILE,
         )
 

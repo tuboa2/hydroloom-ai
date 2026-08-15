@@ -16,40 +16,30 @@ def _catboost_train_params(
     loss_name: str,
     iterations_override: int | None = None,
 ) -> dict[str, Any]:
+    catboost_params = dict(params)
     loss = loss_name.lower()
 
-    if loss == "rmse":
-        loss_function = "RMSE"
-    elif loss == "quantile":
-        loss_function = "Quantile:alpha=0.5"
-    elif loss == "mae":
-        loss_function = "MAE"
-    else:
-        raise ValueError(f"Unsupported CatBoost loss name: {loss_name}")
+    if "loss_function" not in catboost_params:
+        if loss == "rmse":
+            catboost_params["loss_function"] = "RMSE"
+        elif loss == "quantile":
+            catboost_params["loss_function"] = "Quantile:alpha=0.5"
+        elif loss == "mae":
+            catboost_params["loss_function"] = "MAE"
+        else:
+            catboost_params["loss_function"] = "RMSE"
 
     iterations = int(
-        iterations_override if iterations_override is not None else params["iterations"]
+        iterations_override
+        if iterations_override is not None
+        else params.get("iterations", params.get("n_estimators", 1000))
     )
-
-    catboost_params: dict[str, Any] = {
-        "iterations": max(1, iterations),
-        "depth": int(params["depth"]),
-        "learning_rate": float(params["learning_rate"]),
-        "l2_leaf_reg": float(params["l2_leaf_reg"]),
-        "subsample": float(params["subsample"]),
-        "colsample_bylevel": float(params["colsample_bylevel"]),
-        "min_data_in_leaf": float(params["min_data_in_leaf"]),
-        "random_strength": float(params["random_strength"]),
-        "bagging_temperature": float(params["bagging_temperature"]),
-        "border_count": int(params["border_count"]),
-        "grow_policy": str(params["grow_policy"]),
-        "loss_function": loss_function,
-        "random_seed": int(params.get("random_seed", RANDOM_STATE)),
-        "verbose": False,
-        "allow_writing_files": bool(params.get("allow_writing_files", False)),
-        "thread_count": -1,
-        "task_type": "CPU",
-    }
+    catboost_params["iterations"] = max(1, iterations)
+    catboost_params["verbose"] = False
+    catboost_params["allow_writing_files"] = False
+    catboost_params.setdefault("random_seed", RANDOM_STATE)
+    catboost_params.setdefault("thread_count", -1)
+    catboost_params.setdefault("task_type", "CPU")
 
     return catboost_params
 

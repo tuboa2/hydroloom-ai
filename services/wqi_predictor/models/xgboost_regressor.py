@@ -4,11 +4,11 @@ import logging
 import os
 from typing import Any
 
-import losses
 import numpy as np
 import tl2cgen
 import xgboost as xgb
 
+from . import losses
 from ..config import ARTIFACT_DIR, EARLY_STOPPING_ROUNDS, RANDOM_STATE
 
 logger = logging.getLogger(__name__)
@@ -87,7 +87,7 @@ def train_xgboost_fold(
     y_val = np.ascontiguousarray(y_val, dtype=np.float64)
 
     dtrain = xgb.DMatrix(x_train, label=y_train, nthread=-1)
-    dval = xgb.DMatrix(x_val, label=y_val, ref=dtrain, nthread=-1)
+    dval = xgb.DMatrix(x_val, label=y_val, nthread=-1)
 
     xgb_params = _xgb_train_params(params, loss_name)
     objective, eval_metric = _objective_and_eval(loss_name, params)
@@ -99,7 +99,7 @@ def train_xgboost_fold(
         num_boost_round=num_boost_round,
         evals=[(dtrain, "train"), (dval, "valid")],
         obj=objective,
-        feval=eval_metric,
+        custom_metric=eval_metric,
         early_stopping_rounds=early_stopping_rounds,
         verbose_eval=False,
     )
@@ -136,7 +136,7 @@ def train_xgboost_full(
         dtrain=dtrain,
         num_boost_round=max(1, int(num_boost_round)),
         obj=objective,
-        feval=eval_metric,
+        custom_metric=eval_metric,
         verbose_eval=False,
     )
 

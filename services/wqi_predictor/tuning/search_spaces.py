@@ -54,7 +54,9 @@ def suggest_lightgbm(trial: optuna.trial.Trial, loss_name: str) -> dict[str, Any
         "n_jobs": PHYSICAL_CORES,
         "verbose": -1,
         "max_depth": max_depth,
-        "num_leaves": trial.suggest_int("num_leaves", 15, max_leaves_for_depth),
+        "num_leaves": trial.suggest_int(
+            "num_leaves", min(15, max_leaves_for_depth), max_leaves_for_depth
+        ),
         "learning_rate": trial.suggest_float("learning_rate", 0.005, 0.2, log=True),
         "subsample": trial.suggest_float("subsample", 0.5, 1.0),
         "subsample_freq": trial.suggest_int("subsample_freq", 1, 7),

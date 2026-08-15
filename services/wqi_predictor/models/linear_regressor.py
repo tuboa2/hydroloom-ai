@@ -47,9 +47,11 @@ def train_linear_model(
         raise ValueError(f"Unsupported linear model_type: {model_type}")
 
     if target_transform == "quantile_normal":
+        n_quantiles = min(len(x_train), 1000)
         model: LinearModel = TransformedTargetRegressor(
             regressor=base_model,
             transformer=QuantileTransformer(
+                n_quantiles=n_quantiles,
                 output_distribution="normal",
                 random_state=RANDOM_STATE,
             ),

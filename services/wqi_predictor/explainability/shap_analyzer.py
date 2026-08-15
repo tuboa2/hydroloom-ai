@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+import warnings
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -117,7 +118,7 @@ def _save_summary_plot(
         shap_values = shap_values[idx]
         x = x[idx]
 
-    fig = plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(10, 6))
 
     try:
         shap.summary_plot(
@@ -138,7 +139,7 @@ def _save_summary_plot(
         return None
 
     finally:
-        plt.close(fig)
+        plt.close("all")
 
 
 def _save_dependence_plots(
@@ -172,7 +173,7 @@ def _save_dependence_plots(
         safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", feature_name)
         path = output_dir / f"shap_dependence_{safe_name}.png"
 
-        fig = plt.figure(figsize=(8, 6))
+        plt.figure(figsize=(8, 6))
         try:
             shap.dependence_plot(
                 idx_int,
@@ -192,7 +193,7 @@ def _save_dependence_plots(
                 idx_int,
             )
         finally:
-            plt.close(fig)
+            plt.close("all")
 
     return saved
 
@@ -249,23 +250,29 @@ def _save_instance_plots(
 
     for position, sample_index in enumerate(worst_indices):
         idx = int(sample_index)
-        fig = plt.figure(figsize=(10, 4))
+        plt.figure(figsize=(10, 4))
         try:
-            shap.force_plot(
-                expected_value,
-                shap_values[idx],
-                x[idx],
-                feature_names=feature_names_list,
-                matplotlib=True,
-                show=False,
-            )
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    message=r".*identical low and high xlims.*",
+                    category=UserWarning,
+                )
+                shap.force_plot(
+                    expected_value,
+                    shap_values[idx],
+                    x[idx],
+                    feature_names=feature_names_list,
+                    matplotlib=True,
+                    show=False,
+                )
             path = output_dir / f"shap_force_worst_{position + 1:02d}.png"
             plt.savefig(path, dpi=100, bbox_inches="tight")
             result["force_plots"].append(str(path))
         except Exception:
             logger.exception("Failed to save SHAP force plot for sample %d.", idx)
         finally:
-            plt.close(fig)
+            plt.close("all")
 
     critical_indices = np.where(y_true_arr < 25.0)[0]
 
@@ -280,7 +287,7 @@ def _save_instance_plots(
 
         for position, sample_index in enumerate(critical_selection):
             idx = int(sample_index)
-            fig = plt.figure(figsize=(10, 6))
+            plt.figure(figsize=(10, 6))
             try:
                 explanation = shap.Explanation(
                     values=shap_values[idx],
@@ -295,7 +302,7 @@ def _save_instance_plots(
             except Exception:
                 logger.exception("Failed to save SHAP waterfall plot for sample %d.", idx)
             finally:
-                plt.close(fig)
+                plt.close("all")
 
     return result
 
@@ -358,7 +365,7 @@ def generate_shap_artifacts(
 
     suspicious = [record["feature"] for record in top_features if record["suspicious"]]
     summary["suspicious_features"] = suspicious
-    summary["leakaged_detected"] = bool(suspicious)
+    summary["leakage_detected"] = bool(suspicious)
 
     summary["artifacts"]["feature_importance_csv"] = str(
         resolved_dir / "shap_feature_importance.csv"

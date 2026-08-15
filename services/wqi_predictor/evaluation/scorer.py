@@ -175,11 +175,20 @@ def cv_stability_metrics(fold_rmse: Sequence[float] | None) -> dict[str, float]:
 
 
 def compute_all_metrics(
-    y_true_arr: Sequence[float],
-    y_pred_arr: Sequence[float],
+    y_true_arr: Sequence[float] | None = None,
+    y_pred_arr: Sequence[float] | None = None,
     fold_rmse: Sequence[float] | None = None,
+    *,
+    y_true: Sequence[float] | None = None,
+    y_pred: Sequence[float] | None = None,
 ) -> dict[str, Any]:
-    y_true_arr, y_pred_arr_raw = _as_arrays(y_true_arr, y_pred_arr)
+    actual_true = y_true if y_true is not None else y_true_arr
+    actual_pred = y_pred if y_pred is not None else y_pred_arr
+
+    if actual_true is None or actual_pred is None:
+        raise ValueError("Both target and prediction sequences must be provided.")
+
+    y_true_arr, y_pred_arr_raw = _as_arrays(actual_true, actual_pred)
     y_pred_arr = clip_predictions(y_pred_arr_raw)
 
     metrics: dict[str, Any] = {

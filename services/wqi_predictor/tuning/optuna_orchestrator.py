@@ -6,10 +6,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import lightgbm as lgb
 import numpy as np
 import optuna
 import polars as pl
-import search_spaces
 from optuna.exceptions import TrialPruned
 from optuna.pruners import MedianPruner
 from optuna.samplers import TPESampler
@@ -17,20 +17,21 @@ from optuna.trial import TrialState
 from sklearn.model_selection import TimeSeriesSplit
 
 from ..config import CV_CONFIG, OPTUNA_CONFIG
-from .evaluation.scorer import rmse
-from .models import (
+from ..evaluation.scorer import rmse
+from ..models import (
     catboost_regressor,
     lightgbm_regressor,
     linear_regressor,
     xgboost_regressor,
 )
-from .models.common import (
+from ..models.common import (
     ModelError,
     build_fold_preprocessor,
     clip_predictions,
     ensure_dir,
     make_study_name,
 )
+from . import search_spaces
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +124,6 @@ def run(
     cv = TimeSeriesSplit(
         n_splits=int(CV_CONFIG["n_splits"]),
         gap=int(CV_CONFIG["gap_primary"]),
-        shuffle=bool(CV_CONFIG["shuffle"]),
     )
 
     precomputed_folds = []
@@ -147,25 +147,39 @@ def run(
 
     family_lower = model_family.lower()
     if family_lower == "xgboost":
-        train_fn = lambda p, xt, yt, xv, yv: xgboost_regressor.train_xgboost_fold(
-            params=p, loss_name=loss_name, x_train=xt, y_train=yt, x_val=xv, y_val=yv
-        )
+
+        def train_fn(p, xt, yt, xv, yv):
+            return xgboost_regressor.train_xgboost_fold(
+                params=p, loss_name=loss_name, x_train=xt, y_train=yt, x_val=xv, y_val=yv
+            )
+
         predict_fn = xgboost_regressor.predict_xgboost
     elif family_lower == "lightgbm":
-        train_fn = lambda p, xt, yt, xv, yv: lightgbm_regressor.train_lightgbm_fold(
-            params=p, loss_name=loss_name, x_train=xt, y_train=yt, x_val=xv, y_val=yv
-        )
+
+        def train_fn(p, xt, yt, xv, yv):
+            return lightgbm_regressor.train_lightgbm_fold(
+                params=p, loss_name=loss_name, x_train=xt, y_train=yt, x_val=xv, y_val=yv
+            )
+
         predict_fn = lightgbm_regressor.predict_lightgbm
     elif family_lower == "catboost":
-        train_fn = lambda p, xt, yt, xv, yv: catboost_regressor.train_catboost_fold(
-            params=p, loss_name=loss_name, x_train=xt, y_train=yt, x_val=xv, y_val=yv
-        )
-        predict_fn = catboost_regressor.predict_catboost
+
+        def train_fn(p, xt, yt, xv, yv):
+            return catboost_regressor.train_catboost_fold(
+                params=p, loss_name=loss_name, x_train=xt, y_train=yt, x_val=xv, y_val=yv
+            )
+
+        def predict_fn(model, xv, bi):
+            return catboost_regressor.predict_catboost(model, xv)
+
     elif family_lower == "linear":
-        train_fn = lambda p, xt, yt, xv, yv: linear_regressor.train_linear_model(
-            params=p, x_train=xt, y_train=yt
-        )
-        predict_fn = lambda model, xv, bi: linear_regressor.predict_linear(model, xv)
+
+        def train_fn(p, xt, yt, xv, yv):
+            return linear_regressor.train_linear_model(params=p, x_train=xt, y_train=yt)
+
+        def predict_fn(model, xv, bi):
+            return linear_regressor.predict_linear(model, xv)
+
     else:
         raise ModelError(f"Unsupported model family: {model_family}")
 
@@ -178,8 +192,17 @@ def run(
         fold_records = []
 
         for fold_idx, (x_t, y_t, x_v, y_v) in enumerate(precomputed_folds):
-            model, best_iter = train_fn(params, x_t, y_t, x_v, y_v)
-            y_pred_raw = predict_fn(model, x_v, best_iter)
+            try:
+                model, best_iter = train_fn(params, x_t, y_t, x_v, y_v)
+                y_pred_raw = predict_fn(model, x_v, best_iter)
+            except lgb.basic.LightGBMError as exc:
+                logger.warning(
+                    "LightGBMError encountered in fold %d for trial %d: %s. Pruning trial.",
+                    fold_idx,
+                    trial.number,
+                    exc,
+                )
+                raise TrialPruned() from exc
 
             y_pred = clip_predictions(y_pred_raw)
             fold_rmse = float(rmse(y_v, y_pred))
@@ -218,7 +241,7 @@ def run(
             "Running %d new trials... Existing: %d", remaining_trials, completed_trials_count
         )
 
-        study.optimize(objective, n_trials=remaining_trials, gc=False)
+        study.optimize(objective, n_trials=remaining_trials, gc_after_trial=False)
     else:
         logger.info("Trial budget satisfied. Skipping optimization.")
 

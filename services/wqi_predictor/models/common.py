@@ -262,25 +262,30 @@ def save_candidate_artifacts(
     preprocessor: Any,
     best_params: Mapping[str, Any],
     cv_metrics: pl.DataFrame | None,
-    val_metrics: Mapping[str, Any],
+    val_metrics: Mapping[str, Any] | None = None,
     report_card: Mapping[str, Any] | None = None,
     extra_metadata: Mapping[str, Any] | None = None,
+    *,
+    validation_metrics: Mapping[str, Any] | None = None,
 ) -> Path:
     resolved_dir = ensure_dir(candidate_dir)
+    resolved_val_metrics = validation_metrics if validation_metrics is not None else val_metrics
+    if resolved_val_metrics is None:
+        resolved_val_metrics = {}
 
     futures = []
 
     futures.append(
-        _IO_POOL.submit(joblib.dump, model, resolved_dir / "model.joblib", compress=("zstd", 3))
+        _IO_POOL.submit(joblib.dump, model, resolved_dir / "model.joblib", compress=3)
     )
     futures.append(
         _IO_POOL.submit(
-            joblib.dump, preprocessor, resolved_dir / "preprocessor.joblib", compress=("zstd", 3)
+            joblib.dump, preprocessor, resolved_dir / "preprocessor.joblib", compress=3
         )
     )
 
     futures.append(_IO_POOL.submit(write_json, resolved_dir / "best_params.json", best_params))
-    futures.append(_IO_POOL.submit(write_json, resolved_dir / "val_metrics.json", val_metrics))
+    futures.append(_IO_POOL.submit(write_json, resolved_dir / "val_metrics.json", resolved_val_metrics))
 
     cv_path = resolved_dir / "cv_metrics.csv"
     if cv_metrics is not None:

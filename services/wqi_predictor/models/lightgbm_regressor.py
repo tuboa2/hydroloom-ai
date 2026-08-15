@@ -5,24 +5,42 @@ import os
 from typing import Any
 
 import lightgbm as lgb
-import losses
 import numpy as np
 import tl2cgen
 
 from ..config import ARTIFACT_DIR, EARLY_STOPPING_ROUNDS, RANDOM_STATE
+from . import losses
 
 logger = logging.getLogger(__name__)
 
 
-def _lgbm_train_params(params: dict[str, Any], loss_name: str) -> dict[str, Any]:
+def _lgbm_train_params(
+    params: dict[str, Any],
+    loss_name: str,
+    num_features: int | None = None,
+) -> dict[str, Any]:
+    colsample_bytree = float(params["colsample_bytree"])
+    feature_fraction_bynode = float(params["feature_fraction_bynode"])
+
+    if num_features is None and "num_features" in params:
+        num_features = int(params["num_features"])
+
+    if num_features is not None and num_features > 0:
+        min_fraction = 1.0 / float(num_features)
+        colsample_bytree = max(min_fraction, colsample_bytree)
+        if colsample_bytree * feature_fraction_bynode < min_fraction:
+            feature_fraction_bynode = max(feature_fraction_bynode, min_fraction / colsample_bytree)
+        colsample_bytree = min(1.0, colsample_bytree)
+        feature_fraction_bynode = min(1.0, feature_fraction_bynode)
+
     lgbm_params: dict[str, Any] = {
         "learning_rate": float(params["learning_rate"]),
         "num_leaves": int(params["num_leaves"]),
         "max_depth": int(params["max_depth"]),
         "subsample": float(params["subsample"]),
         "bagging_freq": int(params.get("subsample_freq", 0)),
-        "feature_fraction": float(params["colsample_bytree"]),
-        "feature_fraction_bynode": float(params["feature_fraction_bynode"]),
+        "feature_fraction": colsample_bytree,
+        "feature_fraction_bynode": feature_fraction_bynode,
         "min_child_samples": int(params["min_child_samples"]),
         "lambda_l1": float(params["reg_alpha"]),
         "lambda_l2": float(params["reg_lambda"]),
@@ -43,7 +61,11 @@ def _lgbm_train_params(params: dict[str, Any], loss_name: str) -> dict[str, Any]
         lgbm_params["objective"] = "quantile"
         lgbm_params["alpha"] = float(params.get("quantile_alpha", 0.5))
         lgbm_params["metric"] = "rmse"
-    elif loss in {"logcosh", "huber"}:
+    elif loss == "huber":
+        lgbm_params["objective"] = "huber"
+        lgbm_params["alpha"] = float(params.get("huber_delta", 1.0))
+        lgbm_params["metric"] = "rmse"
+    elif loss == "logcosh":
         lgbm_params["metric"] = "None"
     else:
         raise ValueError(f"Unsupported LightGBM loss name: {loss_name}")
@@ -54,13 +76,10 @@ def _lgbm_train_params(params: dict[str, Any], loss_name: str) -> dict[str, Any]
 def _objective_and_eval(loss_name: str, params: dict[str, Any]) -> tuple[Any | None, Any | None]:
     loss = loss_name.lower()
 
-    if loss in {"rmse", "quantile"}:
+    if loss in {"rmse", "quantile", "huber"}:
         return None, None
     if loss == "logcosh":
         return losses.lgbm_log_cosh_objective, losses.lgbm_rmse_eval
-    if loss == "huber":
-        delta = float(params.get("huber_delta", 1.0))
-        return losses.lgbm_huber_objective(delta), losses.lgbm_rmse_eval
 
     raise ValueError(f"Unsupported LightGBM loss name: {loss_name}")
 
@@ -80,11 +99,15 @@ def train_lightgbm_fold(
     y_train = np.ascontiguousarray(y_train, dtype=np.float64)
     y_val = np.ascontiguousarray(y_val, dtype=np.float64)
 
-    train_set = lgb.Dataset(x_train, label=y_train, free_raw_data=True)
-    val_set = lgb.Dataset(x_val, label=y_val, reference=train_set, free_raw_data=True)
+    train_set = lgb.Dataset(x_train, label=y_train, free_raw_data=False)
+    val_set = lgb.Dataset(x_val, label=y_val, reference=train_set, free_raw_data=False)
 
-    lgbm_params = _lgbm_train_params(params, loss_name)
+    num_features = x_train.shape[1] if x_train.ndim > 1 else 1
+    lgbm_params = _lgbm_train_params(params, loss_name, num_features=num_features)
     objective, eval_metric = _objective_and_eval(loss_name, params)
+    if objective is not None:
+        lgbm_params["objective"] = objective
+
     num_boost_round = int(params.get("n_estimators", 1000))
 
     callbacks = [
@@ -98,7 +121,6 @@ def train_lightgbm_fold(
         num_boost_round=num_boost_round,
         valid_sets=[train_set, val_set],
         valid_names=["train", "valid"],
-        fobj=objective,
         feval=eval_metric,
         callbacks=callbacks,
     )
@@ -128,17 +150,19 @@ def train_lightgbm_full(
 
     x_train = np.ascontiguousarray(x_train, dtype=np.float32)
     y_train = np.ascontiguousarray(y_train, dtype=np.float64)
-        
-    train_set = lgb.Dataset(x_train, label=y_train, free_raw_data=True)
 
-    lgbm_params = _lgbm_train_params(params, loss_name)
+    train_set = lgb.Dataset(x_train, label=y_train, free_raw_data=False)
+
+    num_features = x_train.shape[1] if x_train.ndim > 1 else 1
+    lgbm_params = _lgbm_train_params(params, loss_name, num_features=num_features)
     objective, _ = _objective_and_eval(loss_name, params)
+    if objective is not None:
+        lgbm_params["objective"] = objective
 
     booster = lgb.train(
         params=lgbm_params,
         train_set=train_set,
         num_boost_round=max(1, int(num_boost_round)),
-        fobj=objective,
         callbacks=[lgb.log_evaluation(period=0)],
     )
 
@@ -166,3 +190,19 @@ def predict_nanosecond(predictor: tl2cgen.Predictor, x: np.ndarray) -> np.ndarra
     x = np.ascontiguousarray(x, dtype=np.float32)
     dmat = tl2cgen.DMatrix(x)
     return predictor.predict(dmat)
+
+
+def predict_lightgbm(
+    model: lgb.Booster,
+    x: np.ndarray,
+    best_iteration_count: int | None = None,
+) -> np.ndarray:
+    x = np.ascontiguousarray(x, dtype=np.float32)
+
+    if best_iteration_count is not None and int(best_iteration_count) > 0:
+        return np.asarray(
+            model.predict(x, num_iteration=int(best_iteration_count)),
+            dtype=np.float64,
+        )
+
+    return np.asarray(model.predict(x), dtype=np.float64)
