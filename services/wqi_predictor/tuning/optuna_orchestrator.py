@@ -79,6 +79,52 @@ def _prepare_storage(storage: str | None) -> str:
     return resolved_storage
 
 
+def trial_to_result(
+    trial: optuna.trial.FrozenTrial,
+    study_name: str,
+    hemisphere: str,
+    model_family: str,
+    loss_name: str,
+) -> BestTrialResult:
+    records = trial.user_attrs.get("fold_records") or [
+        {"fold": idx, "rmse": val}
+        for idx, val in enumerate(trial.user_attrs.get("fold_rmse", []))
+    ]
+    return BestTrialResult(
+        study_name=study_name,
+        hemisphere=hemisphere,
+        model_family=model_family,
+        loss_name=loss_name,
+        best_trial_number=int(trial.number),
+        best_params=dict(trial.user_attrs.get("params", dict(trial.params))),
+        inner_cv_rmse_mean=float(trial.user_attrs.get("cv_rmse_mean", trial.value or 0.0)),
+        inner_cv_rmse_std=float(trial.user_attrs.get("cv_rmse_std", 0.0)),
+        fold_rmse_values=list(trial.user_attrs.get("fold_rmse", [])),
+        best_iteration_count=int(trial.user_attrs.get("best_iteration_count", 0)),
+        cv_metrics_df=pl.DataFrame(records),
+    )
+
+
+def get_top_trials(
+    study: optuna.Study,
+    study_name: str,
+    hemisphere: str,
+    model_family: str,
+    loss_name: str,
+    top_k: int = 15,
+) -> list[BestTrialResult]:
+    completed = [
+        t for t in study.get_trials(states=(TrialState.COMPLETE,)) if t.value is not None
+    ]
+    if not completed:
+        return []
+    completed.sort(key=lambda t: t.value)
+    return [
+        trial_to_result(t, study_name, hemisphere, model_family, loss_name)
+        for t in completed[:top_k]
+    ]
+
+
 def run(
     hemisphere: str,
     model_family: str,
@@ -88,7 +134,8 @@ def run(
     feature_columns: Sequence[str],
     n_trials: int,
     storage: str | None = None,
-) -> BestTrialResult:
+    top_k: int = 1,
+) -> BestTrialResult | list[BestTrialResult]:
     study_name = make_study_name(hemisphere, model_family, loss_name)
     resolved_storage = _prepare_storage(storage)
 
@@ -233,7 +280,7 @@ def run(
 
         return mean_rmse
 
-    completed_trials_count = len(study.get_trials(states=(TrialState.COMPLETE,)))
+    completed_trials_count = len(study.trials)
     remaining_trials = max(0, int(n_trials) - completed_trials_count)
 
     if remaining_trials > 0:
@@ -245,26 +292,15 @@ def run(
     else:
         logger.info("Trial budget satisfied. Skipping optimization.")
 
+    if top_k > 1:
+        top_trials = get_top_trials(study, study_name, hemisphere, model_family, loss_name, top_k=top_k)
+        if not top_trials:
+            raise ModelError(f"No completed Optuna trials for study: {study_name}")
+        return top_trials
+
     try:
         best_trial = study.best_trial
     except ValueError:
         raise ModelError(f"No completed Optuna trials for study: {study_name}")
 
-    records = best_trial.user_attrs.get("fold_records") or [
-        {"fold": idx, "rmse": val}
-        for idx, val in enumerate(best_trial.user_attrs.get("fold_rmse", []))
-    ]
-
-    return BestTrialResult(
-        study_name=study_name,
-        hemisphere=hemisphere,
-        model_family=model_family,
-        loss_name=loss_name,
-        best_trial_number=int(best_trial.number),
-        best_params=dict(best_trial.user_attrs.get("params", dict(best_trial.params))),
-        inner_cv_rmse_mean=float(best_trial.user_attrs.get("cv_rmse_mean", 0.0)),
-        inner_cv_rmse_std=float(best_trial.user_attrs.get("cv_rmse_std", 0.0)),
-        fold_rmse_values=list(best_trial.user_attrs.get("fold_rmse", [])),
-        best_iteration_count=int(best_trial.user_attrs.get("best_iteration_count", 0)),
-        cv_metrics_df=pl.DataFrame(records),
-    )
+    return trial_to_result(best_trial, study_name, hemisphere, model_family, loss_name)

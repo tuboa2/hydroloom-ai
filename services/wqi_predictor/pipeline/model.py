@@ -471,6 +471,7 @@ def process_study(
     model_dir: Path,
     storage: str,
     run_gap7_diagnostics: bool,
+    top_k: int = 5,
 ) -> dict[str, Any]:
 
     logger.info(
@@ -481,7 +482,7 @@ def process_study(
         spec.n_trials,
     )
 
-    result = run(
+    candidate_results = run(
         hemisphere=data.hemisphere,
         model_family=spec.model_family,
         loss_name=spec.loss_name,
@@ -490,16 +491,54 @@ def process_study(
         feature_columns=data.selected_features,
         n_trials=spec.n_trials,
         storage=storage,
+        top_k=top_k,
     )
+
+    if isinstance(candidate_results, BestTrialResult):
+        candidate_results = [candidate_results]
 
     candidate_dirname = make_candidate_dirname(spec.model_family, spec.loss_name)
     candidate_dir = model_dir / "candidates" / candidate_dirname
     ensure_dir(candidate_dir)
 
-    model, preprocessor, y_val_pred, validation_metrics = _refit_and_evaluate(
-        data=data,
-        result=result,
-    )
+    evaluated_candidates = []
+    for cand in candidate_results:
+        m, prep, y_val_p, val_metrics = _refit_and_evaluate(
+            data=data,
+            result=cand,
+        )
+        passed_prelim, _ = _candidate_gate(
+            result=cand,
+            validation_metrics=val_metrics,
+            baseline=data.baseline,
+            shap_summary=None,
+        )
+        evaluated_candidates.append(
+            {
+                "result": cand,
+                "model": m,
+                "preprocessor": prep,
+                "y_val_pred": y_val_p,
+                "validation_metrics": val_metrics,
+                "passed_prelim": passed_prelim,
+            }
+        )
+
+    passing_candidates = [c for c in evaluated_candidates if c["passed_prelim"]]
+    if passing_candidates:
+        passing_candidates.sort(
+            key=lambda c: c["validation_metrics"].get("validation_rmse") or math.inf
+        )
+        chosen = passing_candidates[0]
+    else:
+        evaluated_candidates.sort(key=lambda c: c["result"].inner_cv_rmse_mean)
+        chosen = evaluated_candidates[0]
+
+    result = chosen["result"]
+    model = chosen["model"]
+    preprocessor = chosen["preprocessor"]
+    y_val_pred = chosen["y_val_pred"]
+    validation_metrics = chosen["validation_metrics"]
 
     if run_gap7_diagnostics:
         gap7_metrics = compute_gap7_diagnostic(data=data, result=result)
