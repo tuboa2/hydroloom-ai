@@ -23,18 +23,10 @@ from services.wqi_predictor.ensemble.diagnostics import (
     compute_monthly_metrics,
     compute_zone_metrics,
 )
-from services.wqi_predictor.ensemble.integrity import (
-    FORBIDDEN_FEATURES,
-    compute_canonical_json_hash,
-    compute_sha256,
-    verify_candidate_integrity,
-)
 from services.wqi_predictor.ensemble.leakage_audit import LeakageAuditor
 from services.wqi_predictor.ensemble.level0_builder import (
     MANDATORY_SEEDS,
     build_level0_specs,
-    build_model_specs,
-    build_seed_params,
     instantiate_model,
 )
 from services.wqi_predictor.ensemble.oof_generator import generate_oof_matrix
@@ -59,28 +51,24 @@ from services.wqi_predictor.ensemble.state_machine import (
 )
 from services.wqi_predictor.ensemble.test_guard import TestSetAccessGuard
 from services.wqi_predictor.ensemble.types import (
-    ArtifactIntegrityError,
     EnsembleStrategy,
     FinalFrozenState,
     GateViolationError,
     Hemisphere,
     LeakageError,
-    Level0ModelSpec,
     ModelSpec,
     OOFGenerationError,
     PostprocessingConfig,
-    ResidualCorrectionError,
     TestSetAccessError,
     WeightOptimizationError,
-    WQIZone,
     WQIState,
+    WQIZone,
 )
 from services.wqi_predictor.ensemble.weighted_blend import (
     fit_constrained_weights,
     predict_constrained_weights,
 )
 from services.wqi_predictor.pipeline.ensemble import Phase5EnsemblePipeline
-
 
 # ==============================================================================
 # Helper fixtures & synthetic generators for Kaggle CPU environment testing
@@ -818,7 +806,12 @@ class TestEndToEndEnsemblePipelineKaggleReady:
                     "passed_baseline_gate": True,
                     "leakage_detected": False,
                     "selected_features": feats,
-                    "hyperparameters": {"depth": 3, "learning_rate": 0.1, "iterations": 5, "verbose": False},
+                    "hyperparameters": {
+                        "depth": 3,
+                        "learning_rate": 0.1,
+                        "iterations": 5,
+                        "verbose": False,
+                    },
                 },
                 {
                     "name": "model-south-catboost-logcosh",
@@ -829,7 +822,12 @@ class TestEndToEndEnsemblePipelineKaggleReady:
                     "passed_baseline_gate": True,
                     "leakage_detected": False,
                     "selected_features": feats,
-                    "hyperparameters": {"depth": 3, "learning_rate": 0.1, "iterations": 5, "verbose": False},
+                    "hyperparameters": {
+                        "depth": 3,
+                        "learning_rate": 0.1,
+                        "iterations": 5,
+                        "verbose": False,
+                    },
                 },
             ]
             with open(hemi_model_dir / "candidate_registry.json", "w", encoding="utf-8") as f:

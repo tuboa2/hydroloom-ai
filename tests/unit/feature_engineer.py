@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+from typing import Literal
+
 import numpy as np
 import polars as pl
 import pytest
-
-from typing import Literal
 
 from services.wqi_predictor.config import TARGET_COLUMN, YEAR_INDEX_COLUMN
 from services.wqi_predictor.data.ingestion import (
@@ -12,18 +12,23 @@ from services.wqi_predictor.data.ingestion import (
     build_feature_frame,
 )
 from services.wqi_predictor.features.engineer import build_engineered_dataset
-from services.wqi_predictor.features.feature_registry import CLUSTER_COLUMNS
+from services.wqi_predictor.features.registry import CLUSTER_COLUMNS
 
 
 @pytest.fixture
-def feature_engineer_frame(synthetic_frame: pl.DataFrame) -> pl.DataFrame:
+def feature_engineer_frame(synthetic_frame: object) -> pl.DataFrame:
+    frame = (
+        pl.from_pandas(synthetic_frame)
+        if not isinstance(synthetic_frame, pl.DataFrame)
+        else synthetic_frame
+    )
     rng = np.random.default_rng(42)
 
-    return synthetic_frame.with_columns(
+    return frame.with_columns(
         [
             pl.Series(
                 name=column,
-                values=rng.uniform(100.0, 1000.0, size=len(synthetic_frame)).astype("float32"),
+                values=rng.uniform(100.0, 1000.0, size=len(frame)).astype("float32"),
             )
             for column in CLUSTER_COLUMNS
         ]

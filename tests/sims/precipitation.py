@@ -1,12 +1,15 @@
 from __future__ import annotations
+
 import numpy as np
 import pytest
-from sims.precipitation import PrecipitationSimulator
-from params import (
+
+from scripts.params import (
     AMC_PARAMS,
 )
+from scripts.sims.precipitation import PrecipitationSimulator
 
 # ─── Fixtures ──────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def rng() -> np.random.Generator:
@@ -96,9 +99,7 @@ class TestDailyRainfallMm:
         north_temp: np.ndarray,
     ) -> None:
         """D3-INV-010: Output arrays must have shape (1825,)."""
-        result = simulator.generate_daily_rainfall_mm(
-            daily_temp=north_temp, hemisphere="north"
-        )
+        result = simulator.generate_daily_rainfall_mm(daily_temp=north_temp, hemisphere="north")
         assert result["daily_rainfall_mm"].shape == (1825,)
         assert result["stratiform_rainfall_mm"].shape == (1825,)
         assert result["convective_rainfall_mm"].shape == (1825,)
@@ -110,9 +111,7 @@ class TestDailyRainfallMm:
         south_temp: np.ndarray,
     ) -> None:
         """D3-INV-010: Output arrays must have shape (1825,)."""
-        result = simulator.generate_daily_rainfall_mm(
-            daily_temp=south_temp, hemisphere="south"
-        )
+        result = simulator.generate_daily_rainfall_mm(daily_temp=south_temp, hemisphere="south")
         assert result["daily_rainfall_mm"].shape == (1825,)
 
     def test_output_dtype(
@@ -121,9 +120,7 @@ class TestDailyRainfallMm:
         north_temp: np.ndarray,
     ) -> None:
         """Output must be float32."""
-        result = simulator.generate_daily_rainfall_mm(
-            daily_temp=north_temp, hemisphere="north"
-        )
+        result = simulator.generate_daily_rainfall_mm(daily_temp=north_temp, hemisphere="north")
         assert result["daily_rainfall_mm"].dtype == np.float32
         assert result["stratiform_rainfall_mm"].dtype == np.float32
         assert result["convective_rainfall_mm"].dtype == np.float32
@@ -134,9 +131,7 @@ class TestDailyRainfallMm:
         north_temp: np.ndarray,
     ) -> None:
         """D3-INV-001: daily_rainfall_mm ∈ [0.0, 150.0]."""
-        result = simulator.generate_daily_rainfall_mm(
-            daily_temp=north_temp, hemisphere="north"
-        )
+        result = simulator.generate_daily_rainfall_mm(daily_temp=north_temp, hemisphere="north")
         rainfall = result["daily_rainfall_mm"]
         assert rainfall.min() >= 0.0
         assert rainfall.max() <= 150.0
@@ -148,9 +143,7 @@ class TestDailyRainfallMm:
         """D3-INV-008: Convective activates only when T > threshold."""
         # Create temperature array entirely below north threshold (25°C)
         cold_temp = np.full(1825, 20.0, dtype=np.float32)
-        result = simulator.generate_daily_rainfall_mm(
-            daily_temp=cold_temp, hemisphere="north"
-        )
+        result = simulator.generate_daily_rainfall_mm(daily_temp=cold_temp, hemisphere="north")
         assert np.all(result["convective_rainfall_mm"] == 0.0), (
             "Convective rainfall should be zero when all temps < 25°C (north)"
         )
@@ -161,9 +154,7 @@ class TestDailyRainfallMm:
     ) -> None:
         """D3-INV-008: South convective gate at 20°C."""
         cold_temp = np.full(1825, 18.0, dtype=np.float32)
-        result = simulator.generate_daily_rainfall_mm(
-            daily_temp=cold_temp, hemisphere="south"
-        )
+        result = simulator.generate_daily_rainfall_mm(daily_temp=cold_temp, hemisphere="south")
         assert np.all(result["convective_rainfall_mm"] == 0.0)
 
     def test_bimodal_independence_inv009(
@@ -176,9 +167,7 @@ class TestDailyRainfallMm:
         Verify that combined rainfall can exceed either component alone.
         """
         hot_temp = np.full(1825, 32.0, dtype=np.float32)
-        result = simulator.generate_daily_rainfall_mm(
-            daily_temp=hot_temp, hemisphere="north"
-        )
+        result = simulator.generate_daily_rainfall_mm(daily_temp=hot_temp, hemisphere="north")
         strat = result["stratiform_rainfall_mm"]
         conv = result["convective_rainfall_mm"]
         combined = result["daily_rainfall_mm"]
@@ -201,9 +190,7 @@ class TestDailyRainfallMm:
         north_temp: np.ndarray,
     ) -> None:
         """Wet mask must be 1 exactly when rainfall > 0."""
-        result = simulator.generate_daily_rainfall_mm(
-            daily_temp=north_temp, hemisphere="north"
-        )
+        result = simulator.generate_daily_rainfall_mm(daily_temp=north_temp, hemisphere="north")
         rainfall = result["daily_rainfall_mm"]
         wet_mask = result["wet_mask"]
         expected_mask = (rainfall > 0.0).astype(np.uint8)
@@ -216,12 +203,8 @@ class TestDailyRainfallMm:
         south_temp: np.ndarray,
     ) -> None:
         """Sanity check: both hemispheres produce nonzero rainfall."""
-        n_result = simulator.generate_daily_rainfall_mm(
-            daily_temp=north_temp, hemisphere="north"
-        )
-        s_result = simulator.generate_daily_rainfall_mm(
-            daily_temp=south_temp, hemisphere="south"
-        )
+        n_result = simulator.generate_daily_rainfall_mm(daily_temp=north_temp, hemisphere="north")
+        s_result = simulator.generate_daily_rainfall_mm(daily_temp=south_temp, hemisphere="south")
         assert n_result["daily_rainfall_mm"].sum() > 0.0
         assert s_result["daily_rainfall_mm"].sum() > 0.0
 
@@ -270,7 +253,7 @@ class TestConsecutiveDryDays:
         rainfall[10] = 5.0  # Single wet day
         cdd = simulator.generate_consecutive_dry_days(rainfall)
         assert cdd[10] == 0
-        assert cdd[9] == 9  # 9 dry days before (days 1-9, CDD[0]=1)
+        assert cdd[9] == 10  # 10 dry days before (days 0-9, CDD[0]=1 ... CDD[9]=10)
         assert cdd[11] == 1  # First dry day after wet day
 
     def test_non_negative_inv002(
@@ -341,9 +324,7 @@ class TestRolling7dRainfall:
         rainfall = np.full(1825, 10.0, dtype=np.float32)
         rolling = simulator.generate_rolling_7d_rainfall_mm(rainfall)
         # After day 6, all windows are full
-        np.testing.assert_allclose(
-            rolling[6:], 10.0, atol=0.02
-        )
+        np.testing.assert_allclose(rolling[6:], 10.0, atol=0.02)
 
     def test_bounds_inv004(
         self,
@@ -520,9 +501,7 @@ class TestAntecedentMoistureCondition:
         else:
             r5_mid = params.r5_mid_dormant
         expected = 1.0 / (1.0 + np.exp(params.k_amc * r5_mid))
-        np.testing.assert_allclose(
-            float(amc[0]), round(expected, 4), atol=1e-3
-        )
+        np.testing.assert_allclose(float(amc[0]), round(expected, 4), atol=1e-3)
 
     def test_time_causality_inv007_today_excluded(
         self,
@@ -547,8 +526,10 @@ class TestAntecedentMoistureCondition:
         # R5(5) = sum(rainfall[0:5]) = 0.0
         # So AMC(5) should be the same as AMC(0) (both have R5 = 0)
         np.testing.assert_allclose(
-            float(amc[5]), float(amc[0]), atol=1e-3,
-            err_msg="AMC(5) was affected by day 5's rainfall — CAUSALITY LEAK!"
+            float(amc[5]),
+            float(amc[0]),
+            atol=1e-3,
+            err_msg="AMC(5) was affected by day 5's rainfall — CAUSALITY LEAK!",
         )
 
         # AMC(6) should reflect day 5's rain: R5(6) = rainfall[5] = 100
@@ -578,7 +559,9 @@ class TestAntecedentMoistureCondition:
             r5_mid = params.r5_mid_dormant
         expected_amc_0 = 1.0 / (1.0 + np.exp(params.k_amc * r5_mid))
         np.testing.assert_allclose(
-            float(amc[0]), round(expected_amc_0, 4), atol=1e-3,
+            float(amc[0]),
+            round(expected_amc_0, 4),
+            atol=1e-3,
         )
 
     def test_high_rainfall_saturates_amc(
@@ -635,8 +618,7 @@ class TestAntecedentMoistureCondition:
         spring_mean = float(amc[10:900].mean())
         winter_mean = float(amc[910:].mean())
         assert spring_mean > winter_mean, (
-            f"Spring AMC ({spring_mean:.4f}) should exceed "
-            f"winter AMC ({winter_mean:.4f})"
+            f"Spring AMC ({spring_mean:.4f}) should exceed winter AMC ({winter_mean:.4f})"
         )
 
     def test_south_hemisphere(
@@ -717,12 +699,8 @@ class TestOrchestrator:
         dry_mask = rainfall == 0.0
         # Where rainfall is 0, CDD should be > 0 (unless it's the
         # very first day and it's wet before — but CDD(0) = 1 if dry)
-        assert np.all(csr[dry_mask] == 0.0), (
-            "CSR should be 0 on all dry days"
-        )
-        assert np.all(cdd[~dry_mask] == 0), (
-            "CDD should be 0 on all wet days"
-        )
+        assert np.all(csr[dry_mask] == 0.0), "CSR should be 0 on all dry days"
+        assert np.all(cdd[~dry_mask] == 0), "CDD should be 0 on all wet days"
 
     def test_south_hemisphere_full(
         self,
@@ -748,9 +726,7 @@ class TestOrchestrator:
     ) -> None:
         """Same seed should produce identical results."""
         rng1 = np.random.default_rng(seed=42)
-        sim1 = PrecipitationSimulator(
-            temporal_index=temporal_index, rng=rng1
-        )
+        sim1 = PrecipitationSimulator(temporal_index=temporal_index, rng=rng1)
         result1 = sim1.generate_features(
             daily_temp=north_temp,
             season_label=north_seasons,
@@ -758,9 +734,7 @@ class TestOrchestrator:
         )
 
         rng2 = np.random.default_rng(seed=42)
-        sim2 = PrecipitationSimulator(
-            temporal_index=temporal_index, rng=rng2
-        )
+        sim2 = PrecipitationSimulator(temporal_index=temporal_index, rng=rng2)
         result2 = sim2.generate_features(
             daily_temp=north_temp,
             season_label=north_seasons,
@@ -769,6 +743,7 @@ class TestOrchestrator:
 
         for key in result1:
             np.testing.assert_array_equal(
-                result1[key], result2[key],
+                result1[key],
+                result2[key],
                 err_msg=f"Reproducibility failed for {key}",
             )

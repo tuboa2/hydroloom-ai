@@ -1,10 +1,13 @@
 from __future__ import annotations
+
 import numpy as np
 import pytest
-from sims.runoff import RunoffSimulator
-from params import RUNOFF_PARAMS
+
+from scripts.params import RUNOFF_PARAMS
+from scripts.sims.runoff import RunoffSimulator
 
 # ─── Fixtures ──────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def rng() -> np.random.Generator:
@@ -181,9 +184,7 @@ class TestDailyRunoffVolumeM3:
 
         # Need separate simulators because RNG state differs
         rng1 = np.random.default_rng(seed=99)
-        sim1 = RunoffSimulator(
-            temporal_index=np.arange(1825, dtype=np.int32), rng=rng1
-        )
+        sim1 = RunoffSimulator(temporal_index=np.arange(1825, dtype=np.int32), rng=rng1)
         runoff_dry = sim1.generate_daily_runoff_volume_m3(
             daily_rainfall_mm=rainfall,
             antecedent_moisture_condition=dry_amc,
@@ -191,9 +192,7 @@ class TestDailyRunoffVolumeM3:
         )
 
         rng2 = np.random.default_rng(seed=99)
-        sim2 = RunoffSimulator(
-            temporal_index=np.arange(1825, dtype=np.int32), rng=rng2
-        )
+        sim2 = RunoffSimulator(temporal_index=np.arange(1825, dtype=np.int32), rng=rng2)
         runoff_wet = sim2.generate_daily_runoff_volume_m3(
             daily_rainfall_mm=rainfall,
             antecedent_moisture_condition=wet_amc,
@@ -246,9 +245,7 @@ class TestDailyRunoffVolumeM3:
         )
         # With CN_I=61, S=(25400/61)-254 ≈ 162.3, Ia=32.5
         # P=0.5 < Ia=32.5, so all runoff should be 0
-        assert np.all(result == 0.0), (
-            "Very light rain with dry soil should produce zero runoff"
-        )
+        assert np.all(result == 0.0), "Very light rain with dry soil should produce zero runoff"
 
 
 # ─── §5.2 Total Suspended Solids Tests ─────────────────────────────────
@@ -387,9 +384,7 @@ class TestTotalSuspendedSolidsMgL:
         tss_long_dry = []
         for seed in range(100):
             rng_i = np.random.default_rng(seed=seed)
-            sim_i = RunoffSimulator(
-                temporal_index=np.arange(1825, dtype=np.int32), rng=rng_i
-            )
+            sim_i = RunoffSimulator(temporal_index=np.arange(1825, dtype=np.int32), rng=rng_i)
             result = sim_i.generate_total_suspended_solids_mg_L(
                 daily_rainfall_mm=rain,
                 daily_runoff_volume_m3=runoff,
@@ -467,9 +462,7 @@ class TestNutrientLoadIndex:
         high_runoff = np.full(1825, 500.0, dtype=np.float32)
 
         rng1 = np.random.default_rng(seed=42)
-        sim1 = RunoffSimulator(
-            temporal_index=np.arange(1825, dtype=np.int32), rng=rng1
-        )
+        sim1 = RunoffSimulator(temporal_index=np.arange(1825, dtype=np.int32), rng=rng1)
         nli_low = sim1.generate_nutrient_load_index(
             daily_runoff_volume_m3=low_runoff,
             daily_max_temp_celsius=north_temp,
@@ -477,9 +470,7 @@ class TestNutrientLoadIndex:
         )
 
         rng2 = np.random.default_rng(seed=42)
-        sim2 = RunoffSimulator(
-            temporal_index=np.arange(1825, dtype=np.int32), rng=rng2
-        )
+        sim2 = RunoffSimulator(temporal_index=np.arange(1825, dtype=np.int32), rng=rng2)
         nli_high = sim2.generate_nutrient_load_index(
             daily_runoff_volume_m3=high_runoff,
             daily_max_temp_celsius=north_temp,
@@ -601,9 +592,7 @@ class TestGlobalInvariants:
         amc_high = np.full(1825, 0.9, dtype=np.float32)
 
         rng1 = np.random.default_rng(seed=77)
-        sim1 = RunoffSimulator(
-            temporal_index=np.arange(1825, dtype=np.int32), rng=rng1
-        )
+        sim1 = RunoffSimulator(temporal_index=np.arange(1825, dtype=np.int32), rng=rng1)
         runoff_low = sim1.generate_daily_runoff_volume_m3(
             daily_rainfall_mm=rain,
             antecedent_moisture_condition=amc_low,
@@ -611,9 +600,7 @@ class TestGlobalInvariants:
         )
 
         rng2 = np.random.default_rng(seed=77)
-        sim2 = RunoffSimulator(
-            temporal_index=np.arange(1825, dtype=np.int32), rng=rng2
-        )
+        sim2 = RunoffSimulator(temporal_index=np.arange(1825, dtype=np.int32), rng=rng2)
         runoff_high = sim2.generate_daily_runoff_volume_m3(
             daily_rainfall_mm=rain,
             antecedent_moisture_condition=amc_high,
@@ -650,9 +637,7 @@ class TestGlobalInvariants:
         }
         actual_keys = set(result.keys())
         overlap = actual_keys & forbidden_keys
-        assert len(overlap) == 0, (
-            f"INV-026: Latent variables found in Domain 4 output: {overlap}"
-        )
+        assert len(overlap) == 0, f"INV-026: Latent variables found in Domain 4 output: {overlap}"
 
 
 # ─── Master Orchestrator Integration Tests ─────────────────────────────
@@ -720,9 +705,7 @@ class TestOrchestrator:
         csr = np.zeros(1825, dtype=np.float32)
 
         rng1 = np.random.default_rng(seed=42)
-        sim1 = RunoffSimulator(
-            temporal_index=np.arange(1825, dtype=np.int32), rng=rng1
-        )
+        sim1 = RunoffSimulator(temporal_index=np.arange(1825, dtype=np.int32), rng=rng1)
         result1 = sim1.generate_features(
             daily_rainfall_mm=rain,
             antecedent_moisture_condition=amc,
@@ -734,9 +717,7 @@ class TestOrchestrator:
         )
 
         rng2 = np.random.default_rng(seed=42)
-        sim2 = RunoffSimulator(
-            temporal_index=np.arange(1825, dtype=np.int32), rng=rng2
-        )
+        sim2 = RunoffSimulator(temporal_index=np.arange(1825, dtype=np.int32), rng=rng2)
         result2 = sim2.generate_features(
             daily_rainfall_mm=rain,
             antecedent_moisture_condition=amc,

@@ -5,12 +5,16 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import polars as pl
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+scripts_dir = ROOT / "scripts"
 
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+if str(scripts_dir) not in sys.path:
+    sys.path.insert(0, str(scripts_dir))
 
 from services.wqi_predictor import config
 
@@ -57,9 +61,9 @@ def _synthetic_frame(hemisphere: str = "north") -> pd.DataFrame:
         else:
             data[column] = rng.normal(loc=10.0, scale=2.0, size=n).astype("float32")
 
-    return pd.DataFrame(data)
+    return pl.DataFrame(data)
 
 
 @pytest.fixture
-def synthetic_frame() -> pd.DataFrame:
+def synthetic_frame() -> pl.DataFrame:
     return _synthetic_frame("north")

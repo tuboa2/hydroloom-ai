@@ -5,7 +5,7 @@ import pytest
 from numpy.random import Generator
 from sklearn.cluster import KMeans
 
-from sims.cluster import (
+from scripts.sims.cluster import (
     ARCHETYPE_CONSERVATIONISTS,
     ARCHETYPE_HEAVY_USERS,
     ARCHETYPE_OUTDOOR_LANDSCAPE,
@@ -17,7 +17,6 @@ from sims.cluster import (
     resolve_archetype_mapping,
     subsample_household_indices,
 )
-
 
 # ─── Fixtures ───────────────────────────────────────────────────────────
 
@@ -44,16 +43,19 @@ def synthetic_kmeans_model() -> KMeans:
     # 4 features: log_per_capita_usage, dry_day_spike_factor,
     #             efficiency_penalty_ratio, landscape_demand_index
     np.random.seed(99)
-    data = np.array([
-        # Cluster 0: Conservationists — low usage
-        *[[1.0, 1.0, 1.2, 0.3] for _ in range(25)],
-        # Cluster 1: Heavy Users — high usage
-        *[[8.0, 2.0, 1.8, 0.7] for _ in range(25)],
-        # Cluster 2: Outdoor/Landscape — moderate usage, high landscape
-        *[[4.0, 1.5, 1.4, 0.9] for _ in range(25)],
-        # Cluster 3: Standard Consumers — moderate usage, low landscape
-        *[[3.5, 1.2, 1.3, 0.4] for _ in range(25)],
-    ], dtype=np.float64)
+    data = np.array(
+        [
+            # Cluster 0: Conservationists — low usage
+            *[[1.0, 1.0, 1.2, 0.3] for _ in range(25)],
+            # Cluster 1: Heavy Users — high usage
+            *[[8.0, 2.0, 1.8, 0.7] for _ in range(25)],
+            # Cluster 2: Outdoor/Landscape — moderate usage, high landscape
+            *[[4.0, 1.5, 1.4, 0.9] for _ in range(25)],
+            # Cluster 3: Standard Consumers — moderate usage, low landscape
+            *[[3.5, 1.2, 1.3, 0.4] for _ in range(25)],
+        ],
+        dtype=np.float64,
+    )
 
     model.fit(data)
     return model
@@ -111,9 +113,7 @@ def synthetic_archetype_mapping() -> dict[int, str]:
 class TestResolveArchetypeMapping:
     """Tests for the centroid-to-archetype mapping logic."""
 
-    def test_correct_mapping_from_known_centroids(
-        self, synthetic_kmeans_model: KMeans
-    ) -> None:
+    def test_correct_mapping_from_known_centroids(self, synthetic_kmeans_model: KMeans) -> None:
         """Verify archetype assignment from known centroid geometry."""
         mapping = resolve_archetype_mapping(synthetic_kmeans_model)
 
@@ -126,27 +126,18 @@ class TestResolveArchetypeMapping:
             ARCHETYPE_STANDARD_CONSUMERS,
         }
 
-    def test_heavy_users_has_max_log_per_capita(
-        self, synthetic_kmeans_model: KMeans
-    ) -> None:
+    def test_heavy_users_has_max_log_per_capita(self, synthetic_kmeans_model: KMeans) -> None:
         """Heavy Users must be the cluster with highest centroid[:, 0]."""
         mapping = resolve_archetype_mapping(synthetic_kmeans_model)
         centers = synthetic_kmeans_model.cluster_centers_
-        heavy_id = [
-            k for k, v in mapping.items() if v == ARCHETYPE_HEAVY_USERS
-        ][0]
+        heavy_id = [k for k, v in mapping.items() if v == ARCHETYPE_HEAVY_USERS][0]
         assert centers[heavy_id, 0] == centers[:, 0].max()
 
-    def test_conservationists_has_min_log_per_capita(
-        self, synthetic_kmeans_model: KMeans
-    ) -> None:
+    def test_conservationists_has_min_log_per_capita(self, synthetic_kmeans_model: KMeans) -> None:
         """Conservationists must be the cluster with lowest centroid[:, 0]."""
         mapping = resolve_archetype_mapping(synthetic_kmeans_model)
         centers = synthetic_kmeans_model.cluster_centers_
-        cons_id = [
-            k for k, v in mapping.items()
-            if v == ARCHETYPE_CONSERVATIONISTS
-        ][0]
+        cons_id = [k for k, v in mapping.items() if v == ARCHETYPE_CONSERVATIONISTS][0]
         assert centers[cons_id, 0] == centers[:, 0].min()
 
     def test_wrong_shape_raises_value_error(self) -> None:
@@ -156,9 +147,7 @@ class TestResolveArchetypeMapping:
         with pytest.raises(ValueError, match="Expected KMeans centroids shape"):
             resolve_archetype_mapping(model)
 
-    def test_all_archetypes_unique(
-        self, synthetic_kmeans_model: KMeans
-    ) -> None:
+    def test_all_archetypes_unique(self, synthetic_kmeans_model: KMeans) -> None:
         """No two clusters should map to the same archetype."""
         mapping = resolve_archetype_mapping(synthetic_kmeans_model)
         values = list(mapping.values())
@@ -171,33 +160,25 @@ class TestResolveArchetypeMapping:
 class TestPredictClusterLabels:
     """Tests for cluster label prediction."""
 
-    def test_output_shape_matches_input(
-        self, synthetic_kmeans_model: KMeans
-    ) -> None:
+    def test_output_shape_matches_input(self, synthetic_kmeans_model: KMeans) -> None:
         """Output must have same length as input rows."""
         features = np.random.default_rng(0).random((50, 4))
         labels = predict_cluster_labels(synthetic_kmeans_model, features)
         assert labels.shape == (50,)
 
-    def test_labels_in_valid_range(
-        self, synthetic_kmeans_model: KMeans
-    ) -> None:
+    def test_labels_in_valid_range(self, synthetic_kmeans_model: KMeans) -> None:
         """All labels must be in {0, 1, 2, 3}."""
         features = np.random.default_rng(0).random((100, 4))
         labels = predict_cluster_labels(synthetic_kmeans_model, features)
         assert set(np.unique(labels)).issubset({0, 1, 2, 3})
 
-    def test_wrong_feature_count_raises_assertion(
-        self, synthetic_kmeans_model: KMeans
-    ) -> None:
+    def test_wrong_feature_count_raises_assertion(self, synthetic_kmeans_model: KMeans) -> None:
         """Mismatched feature count must fail assertion."""
         features = np.random.default_rng(0).random((50, 3))
         with pytest.raises(AssertionError, match="Feature count mismatch"):
             predict_cluster_labels(synthetic_kmeans_model, features)
 
-    def test_1d_input_raises_assertion(
-        self, synthetic_kmeans_model: KMeans
-    ) -> None:
+    def test_1d_input_raises_assertion(self, synthetic_kmeans_model: KMeans) -> None:
         """1-D input must fail assertion."""
         features = np.random.default_rng(0).random(4)
         with pytest.raises(AssertionError, match="Expected 2D"):
@@ -240,9 +221,7 @@ class TestSubsampleHouseholdIndices:
         idx2 = subsample_household_indices(100_000, 5_000, rng2)
         np.testing.assert_array_equal(idx1, idx2)
 
-    def test_subsample_exceeds_population_raises(
-        self, rng: Generator
-    ) -> None:
+    def test_subsample_exceeds_population_raises(self, rng: Generator) -> None:
         """subsample > population must raise ValueError."""
         with pytest.raises(ValueError, match="cannot exceed"):
             subsample_household_indices(100, 200, rng)
@@ -366,12 +345,8 @@ class TestComputeClusterDailyMeans:
             synthetic_archetype_mapping,
             n_days,
         )
-        heavy_key = CLUSTER_FEATURE_TEMPLATE.format(
-            archetype=ARCHETYPE_HEAVY_USERS
-        )
-        cons_key = CLUSTER_FEATURE_TEMPLATE.format(
-            archetype=ARCHETYPE_CONSERVATIONISTS
-        )
+        heavy_key = CLUSTER_FEATURE_TEMPLATE.format(archetype=ARCHETYPE_HEAVY_USERS)
+        cons_key = CLUSTER_FEATURE_TEMPLATE.format(archetype=ARCHETYPE_CONSERVATIONISTS)
         assert result[heavy_key].mean() > result[cons_key].mean(), (
             f"Heavy Users mean ({result[heavy_key].mean():.1f}) should "
             f"exceed Conservationists ({result[cons_key].mean():.1f})"
@@ -396,9 +371,7 @@ class TestComputeClusterDailyMeans:
             n_days,
         )
         for name, arr in result.items():
-            assert arr.std() > 0, (
-                f"Zero temporal variance in {name} violates §0.4"
-            )
+            assert arr.std() > 0, f"Zero temporal variance in {name} violates §0.4"
 
     def test_feature_name_format(
         self,
@@ -436,12 +409,8 @@ class TestComputeClusterDailyMeans:
         }
         result = compute_cluster_daily_means(matrix, labels, mapping, n_days)
         # The empty clusters should have zeros
-        heavy_key = CLUSTER_FEATURE_TEMPLATE.format(
-            archetype=ARCHETYPE_HEAVY_USERS
-        )
-        np.testing.assert_array_equal(
-            result[heavy_key], np.zeros(n_days, dtype=np.float32)
-        )
+        heavy_key = CLUSTER_FEATURE_TEMPLATE.format(archetype=ARCHETYPE_HEAVY_USERS)
+        np.testing.assert_array_equal(result[heavy_key], np.zeros(n_days, dtype=np.float32))
 
     def test_manual_mean_calculation(self) -> None:
         """Verify mean calculation against hand-computed values."""
@@ -468,23 +437,15 @@ class TestComputeClusterDailyMeans:
 
         result = compute_cluster_daily_means(matrix, labels, mapping, n_days)
 
-        cons_key = CLUSTER_FEATURE_TEMPLATE.format(
-            archetype=ARCHETYPE_CONSERVATIONISTS
-        )
-        heavy_key = CLUSTER_FEATURE_TEMPLATE.format(
-            archetype=ARCHETYPE_HEAVY_USERS
-        )
+        cons_key = CLUSTER_FEATURE_TEMPLATE.format(archetype=ARCHETYPE_CONSERVATIONISTS)
+        heavy_key = CLUSTER_FEATURE_TEMPLATE.format(archetype=ARCHETYPE_HEAVY_USERS)
 
         # Cluster 0 mean: [(100+400)/2, (200+500)/2, (300+600)/2]
         # = [250, 350, 450]
-        np.testing.assert_array_almost_equal(
-            result[cons_key], [250.0, 350.0, 450.0], decimal=1
-        )
+        np.testing.assert_array_almost_equal(result[cons_key], [250.0, 350.0, 450.0], decimal=1)
         # Cluster 1 mean: [(1000+700)/2, (1100+800)/2, (1200+900)/2]
         # = [850, 950, 1050]
-        np.testing.assert_array_almost_equal(
-            result[heavy_key], [850.0, 950.0, 1050.0], decimal=1
-        )
+        np.testing.assert_array_almost_equal(result[heavy_key], [850.0, 950.0, 1050.0], decimal=1)
 
 
 # ─── Integration Tests ──────────────────────────────────────────────────
@@ -523,14 +484,10 @@ class TestClusterMeansProperties:
     """Property-based invariant tests for cluster mean computation."""
 
     @pytest.mark.parametrize("n_households", [100, 500, 2000])
-    def test_output_shape_invariant_across_sizes(
-        self, n_households: int, rng: Generator
-    ) -> None:
+    def test_output_shape_invariant_across_sizes(self, n_households: int, rng: Generator) -> None:
         """Output shape must always be (n_days,) regardless of n_households."""
         n_days = 50
-        matrix = rng.uniform(
-            50, 2000, size=(n_households, n_days)
-        ).astype(np.float32)
+        matrix = rng.uniform(50, 2000, size=(n_households, n_days)).astype(np.float32)
         labels = rng.integers(0, 4, size=n_households)
         mapping = {
             0: ARCHETYPE_CONSERVATIONISTS,
@@ -556,9 +513,7 @@ class TestClusterMeansProperties:
         contributing households on that day."""
         n_households = 100
         n_days = 30
-        matrix = rng.uniform(
-            100, 500, size=(n_households, n_days)
-        ).astype(np.float32)
+        matrix = rng.uniform(100, 500, size=(n_households, n_days)).astype(np.float32)
         labels = rng.integers(0, 4, size=n_households)
         mapping = {
             0: ARCHETYPE_CONSERVATIONISTS,
@@ -572,9 +527,7 @@ class TestClusterMeansProperties:
             if mask.sum() == 0:
                 continue
             cluster_data = matrix[mask, :]
-            feature_key = CLUSTER_FEATURE_TEMPLATE.format(
-                archetype=archetype_name
-            )
+            feature_key = CLUSTER_FEATURE_TEMPLATE.format(archetype=archetype_name)
             mean_arr = result[feature_key]
             for d in range(n_days):
                 assert mean_arr[d] >= cluster_data[:, d].min() - 0.01
@@ -624,6 +577,4 @@ class TestSchemaCompliance:
             n_days,
         )
         for name, arr in result.items():
-            assert arr.dtype == np.float32, (
-                f"§10.1 requires Float32 for {name}, got {arr.dtype}"
-            )
+            assert arr.dtype == np.float32, f"§10.1 requires Float32 for {name}, got {arr.dtype}"

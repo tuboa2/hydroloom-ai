@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 
 from services.wqi_predictor import config
@@ -30,28 +30,26 @@ def test_seed_everything_makes_numpy_deterministic() -> None:
     assert np.array_equal(first, second)
 
 
-def test_validate_schema_accepts_expected_schema(synthetic_frame: pd.DataFrame) -> None:
+def test_validate_schema_accepts_expected_schema(synthetic_frame: pl.DataFrame) -> None:
     validate_schema(synthetic_frame, "north")
 
 
-def test_validate_schema_rejects_missing_column(synthetic_frame: pd.DataFrame) -> None:
-    frame = synthetic_frame.drop(columns=["daily_rainfall_mm"])
+def test_validate_schema_rejects_missing_column(synthetic_frame: pl.DataFrame) -> None:
+    frame = synthetic_frame.drop("daily_rainfall_mm")
 
     with pytest.raises(DataValidationError):
         validate_schema(frame, "north")
 
 
-def test_future_leakage_column_is_rejected(synthetic_frame: pd.DataFrame) -> None:
-    frame = synthetic_frame.copy()
-    frame["antecedent_moisture_condition_lead5"] = 0.0
+def test_future_leakage_column_is_rejected(synthetic_frame: pl.DataFrame) -> None:
+    frame = synthetic_frame.with_columns(pl.lit(0.0).alias("antecedent_moisture_condition_lead5"))
 
     with pytest.raises(DataValidationError):
         validate_schema(frame, "north")
 
 
-def test_anomaly_score_is_dropped_not_raised(synthetic_frame: pd.DataFrame) -> None:
-    frame = synthetic_frame.copy()
-    frame["anomaly_score"] = 0.1
+def test_anomaly_score_is_dropped_not_raised(synthetic_frame: pl.DataFrame) -> None:
+    frame = synthetic_frame.with_columns(pl.lit(0.1).alias("anomaly_score"))
 
     validate_schema(frame, "north")
 
@@ -62,7 +60,7 @@ def test_anomaly_score_is_dropped_not_raised(synthetic_frame: pd.DataFrame) -> N
 
 
 def test_build_feature_frame_removes_blacklisted_and_excluded_columns(
-    synthetic_frame: pd.DataFrame,
+    synthetic_frame: pl.DataFrame,
 ) -> None:
     feature_frame = build_feature_frame(synthetic_frame)
 
@@ -78,9 +76,9 @@ def test_build_feature_frame_removes_blacklisted_and_excluded_columns(
     assert forbidden.isdisjoint(feature_frame.columns)
 
 
-def _make_ingested(frame: pd.DataFrame) -> IngestedHemisphere:
+def _make_ingested(frame: pl.DataFrame) -> IngestedHemisphere:
     feature_frame = build_feature_frame(frame)
-    target = frame[config.TARGET_COLUMN].copy().reset_index(drop=True)
+    target = frame[config.TARGET_COLUMN]
 
     return IngestedHemisphere(
         hemisphere="north",
@@ -92,7 +90,7 @@ def _make_ingested(frame: pd.DataFrame) -> IngestedHemisphere:
     )
 
 
-def test_chronological_split_sizes_and_order(synthetic_frame: pd.DataFrame) -> None:
+def test_chronological_split_sizes_and_order(synthetic_frame: pl.DataFrame) -> None:
     validate_temporal_index(synthetic_frame)
 
     ingested = _make_ingested(synthetic_frame)
@@ -116,7 +114,7 @@ def test_chronological_split_sizes_and_order(synthetic_frame: pd.DataFrame) -> N
 
 
 def test_feature_matrix_does_not_contain_target_or_identifiers(
-    synthetic_frame: pd.DataFrame,
+    synthetic_frame: pl.DataFrame,
 ) -> None:
     validate_temporal_index(synthetic_frame)
 
@@ -132,7 +130,7 @@ def test_feature_matrix_does_not_contain_target_or_identifiers(
 
 def test_psi_numeric_is_zero_for_identical_distributions() -> None:
     rng = np.random.default_rng(42)
-    series = pd.Series(rng.normal(size=500))
+    series = pl.Series(rng.normal(size=500))
 
     psi = _psi_numeric(series, series, bins=10)
 
@@ -142,10 +140,9 @@ def test_psi_numeric_is_zero_for_identical_distributions() -> None:
 def test_psi_numeric_is_positive_for_shifted_distribution() -> None:
     rng = np.random.default_rng(42)
 
-    base = pd.Series(rng.normal(loc=0.0, scale=1.0, size=500))
-    compare = pd.Series(rng.normal(loc=2.0, scale=1.0, size=500))
+    base = pl.Series(rng.normal(loc=0.0, scale=1.0, size=500))
+    compare = pl.Series(rng.normal(loc=2.0, scale=1.0, size=500))
 
     psi = _psi_numeric(base, compare, bins=10)
 
     assert psi > 0.1
-    
