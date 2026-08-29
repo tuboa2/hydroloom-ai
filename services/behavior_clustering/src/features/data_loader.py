@@ -1,7 +1,9 @@
-import polars as pl
-import numpy as np
 from pathlib import Path
 from typing import cast
+
+import numpy as np
+import polars as pl
+
 
 class DataLoader:
     # stateful loader with embedded validation gates
@@ -19,22 +21,24 @@ class DataLoader:
                 "household_id": pl.Utf8,
                 "occupancy_count": pl.Int16,
                 "appliance_efficiency_score": pl.Float32,
-                "landscape_type": pl.Categorical
-            }
+                "landscape_type": pl.Categorical,
+            },
         )
         # fixed: clipped the massive appliance efficiency score outlier
         self._household = self._household.with_columns(
             pl.col("appliance_efficiency_score").clip(0.15, 1.0)
         )
-        self._water_usage = pl.read_parquet(
-            self.data_dir / f"{self.hemisphere}_water_usage.parquet"
-        ).to_numpy().astype(np.float32)
+        self._water_usage = (
+            pl.read_parquet(self.data_dir / f"{self.hemisphere}_water_usage.parquet")
+            .to_numpy()
+            .astype(np.float32)
+        )
         self._environment = pl.read_csv(
             self.data_dir / f"{self.hemisphere}_environment.csv",
             schema_overrides={
                 "daily_max_temp_celsius": pl.Float32,
-                "daily_rainfall_mm": pl.Float32
-            }
+                "daily_rainfall_mm": pl.Float32,
+            },
         )
         self._run_validations()
 
@@ -42,7 +46,7 @@ class DataLoader:
         assert self._household is not None, "Household data has not been loaded"
         assert self._water_usage is not None, "Water usage data has not been loaded"
         assert self._environment is not None, "Environment data has not been loaded"
-        
+
         assert self._household.height == 100_000
         assert self._water_usage.shape == (100_000, 365)
         assert self._environment.height == 365
