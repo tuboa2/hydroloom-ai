@@ -74,6 +74,8 @@ class ResidualCorrectionError(RuntimeError):
 class TestSetAccessError(RuntimeError):
     """Raised when Year 4 Test data is accessed outside the strict single-touch guard."""
 
+    __test__ = False
+
 
 class ArtifactIntegrityError(RuntimeError):
     """Raised when required candidate models, hashes, or metadata artifacts are corrupt or missing."""
@@ -91,6 +93,9 @@ class ModelSpec:
     best_iteration_count: int
     artifact_dir: Path
     model_id: str
+
+
+Level0ModelSpec = ModelSpec
 
 
 @dataclass(frozen=True)
@@ -159,6 +164,7 @@ class FinalFrozenState:
 
 @dataclass(frozen=True)
 class TestEvaluationReceipt:
+    __test__ = False
     hemisphere: Hemisphere
     evaluated_at_utc: str
     final_state_hash: str

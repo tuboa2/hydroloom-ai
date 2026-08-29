@@ -43,10 +43,21 @@ def load_model_registry(
     hemisphere: Hemisphere,
     artifacts_root: Path,
 ) -> dict[str, Any]:
-    registry_path = artifacts_root / "model" / hemisphere.value / "registry" / "manifest.json"
-    if not registry_path.exists():
+    candidate_paths = [
+        artifacts_root / "model" / hemisphere.value / "candidate_registry.json",
+        artifacts_root / "model" / hemisphere.value / "registry" / "manifest.json",
+        artifacts_root / "model" / hemisphere.value / "manifest.json",
+    ]
+
+    registry_path = None
+    for p in candidate_paths:
+        if p.exists():
+            registry_path = p
+            break
+
+    if registry_path is None:
         raise ArtifactIntegrityError(
-            f"Phase 4 registry manifest missing for hemisphere {hemisphere.value} at {registry_path}"
+            f"Phase 4 registry manifest missing for hemisphere {hemisphere.value}. Looked in: {[str(p) for p in candidate_paths]}"
         )
 
     try:
@@ -60,24 +71,43 @@ def load_model_registry(
     return registry
 
 
+load_phase4_registry = load_model_registry
+
+
 def verify_candidate_integrity(
     *,
     hemisphere: Hemisphere,
     registry: Mapping[str, Any],
     artifacts_root: Path,
 ) -> dict[str, Any]:
-    candidates = registry.get("candidates", [])
+    candidates = registry.get("candidates", registry.get("passed_candidates", []))
     if not candidates:
         raise ArtifactIntegrityError(
             f"No candidates found in Phase 4 registry for {hemisphere.value}"
         )
+
+    # Load fallback selected features if not present on each candidate
+    selection_features: list[str] = []
+    sel_path = artifacts_root / "selection" / hemisphere.value / "selected_features.json"
+    if sel_path.exists():
+        try:
+            with open(sel_path, encoding="utf-8") as f:
+                sel_data = json.load(f)
+                selection_features = sel_data.get("final_features", [])
+        except Exception:
+            pass
+
+    feature_set_hash = registry.get("feature_set_hash", "frozen")
 
     accepted_candidates: list[dict[str, Any]] = []
     collapsed_candidates: list[dict[str, Any]] = []
     seen_signatures: set[str] = set()
 
     for cand in candidates:
-        name = cand.get("name", "unknown")
+        name = cand.get("name", cand.get("study_name", "unknown"))
+        study_name = cand.get("study_name", name)
+        family = cand.get("model_family", "").lower()
+        loss_name = cand.get("loss_name", cand.get("loss", "rmse"))
 
         # 1. Baseline gate verification
         if not cand.get("passed_baseline_gate", False):
@@ -87,27 +117,46 @@ def verify_candidate_integrity(
         if cand.get("leakage_detected", True):
             raise LeakageError(f"Candidate {name} flagged with leakage_detected=True in Phase 4.")
 
+        # Resolve selected features
+        features = cand.get("selected_features", selection_features)
+        if not features and selection_features:
+            features = selection_features
+
         # 3. Forbidden feature audit
-        features = cand.get("selected_features", [])
         for feat in features:
             if feat in FORBIDDEN_FEATURES:
                 raise LeakageError(f"Candidate {name} contains forbidden leakage feature: {feat}")
 
         # 4. Best iteration count check for GBDTs
-        family = cand.get("model_family", "").lower()
+        best_iter = cand.get("best_iteration_count")
         if family in {"lightgbm", "xgboost", "catboost"}:
-            best_iter = cand.get("best_iteration_count")
             if best_iter is None or int(best_iter) <= 0:
                 raise ArtifactIntegrityError(
                     f"Boosted tree candidate {name} missing valid best_iteration_count."
                 )
+        else:
+            best_iter = best_iter or 100
+
+        # Resolve hyperparameters
+        hyperparameters = dict(cand.get("hyperparameters", {}))
+        if not hyperparameters and cand.get("artifact_dir"):
+            art_p = Path(cand["artifact_dir"])
+            if not art_p.is_absolute():
+                art_p = artifacts_root.parent / art_p if not (artifacts_root / art_p).exists() else artifacts_root / art_p
+            best_params_p = art_p / "best_params.json"
+            if best_params_p.exists():
+                try:
+                    with open(best_params_p, encoding="utf-8") as f:
+                        hyperparameters = json.load(f)
+                except Exception:
+                    pass
 
         # 5. Duplicate model stream collapse (Section 3.2 South CatBoost anomaly)
-        # Unique signature: model_family + hyperparameters summary
         sig_payload = {
             "family": family,
-            "loss": cand.get("loss_name", ""),
-            "params": cand.get("hyperparameters", {}),
+            "loss": loss_name,
+            "params": hyperparameters,
+            "best_iter": int(best_iter) if best_iter is not None else 100,
         }
         sig_hash = compute_canonical_json_hash(sig_payload)
 
@@ -122,7 +171,18 @@ def verify_candidate_integrity(
             continue
 
         seen_signatures.add(sig_hash)
-        accepted_candidates.append(cand)
+        accepted_candidates.append(
+            {
+                "name": name,
+                "study_name": study_name,
+                "model_family": family,
+                "loss_name": loss_name,
+                "best_iteration_count": int(best_iter),
+                "hyperparameters": hyperparameters,
+                "selected_features": features,
+                "feature_set_hash": cand.get("feature_set_hash", feature_set_hash),
+            }
+        )
 
     if not accepted_candidates:
         raise ArtifactIntegrityError(

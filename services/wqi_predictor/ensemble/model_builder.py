@@ -55,6 +55,9 @@ def build_model_specs(
     return tuple(specs)
 
 
+build_level0_specs = build_model_specs
+
+
 def build_seed_params(
     *,
     model_family: str,
