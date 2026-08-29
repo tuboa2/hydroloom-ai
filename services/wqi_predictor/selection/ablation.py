@@ -719,44 +719,51 @@ def _evaluate_family_ablation_task(
                 "ablation/family_dropped": int(dropped),
             }
         )
-
     return family, count, ablation_rmse, relative_change, protected, True, dropped
 
 
 def run_family_ablation(
-    x_train: pl.DataFrame,
-    y_train: pl.Series,
-    x_val: pl.DataFrame,
-    y_val: pl.Series,
-    feature_columns: Sequence[str],
-    scores: Mapping[str, float],
-    feature_cap: int,
+    x_train: pl.DataFrame | Any,
+    y_train: pl.Series | Any,
+    x_val: pl.DataFrame | Any = None,
+    y_val: pl.Series | Any = None,
+    feature_columns: Sequence[str] | None = None,
+    scores: Mapping[str, float] | None = None,
+    feature_cap: int = 25,
     required_columns: Sequence[str] = REQUIRED_FEATURES,
     min_relative_improvement: float = 0.005,
     random_state: int = 42,
     n_jobs: int | None = -1,
     max_eval_samples: int = _DEFAULT_MAX_EVAL_SAMPLES,
+    x_validation: pl.DataFrame | Any = None,
+    y_validation: pl.Series | Any = None,
 ) -> tuple[list[str], pl.DataFrame, float, float, list[str]]:
     """
-    Optimimized family-ablation entrypoint.
-
-    Preserved:
-    - return structure
-    - report schema
-    - family-dropping logic
-    - protected-family logic
-    - threshold logic
-    - feature-cap enforcement
-    - logging format
-
-    Optimized:
-    - one preprocessing pass
-    - float32 C-contiguous matrices
-    - deterministic evaluation sampling
-    - faster single-threaded estimator
-    - controlled outer parallelism
+    Optimized family-ablation entrypoint.
     """
-    feature_columns = list(feature_columns)
+    import pandas as pd
+
+    if x_val is None and x_validation is not None:
+        x_val = x_validation
+    if y_val is None and y_validation is not None:
+        y_val = y_validation
+
+    if isinstance(x_train, pd.DataFrame):
+        x_train = pl.from_pandas(x_train)
+    if isinstance(y_train, pd.Series):
+        y_train = pl.Series(name=y_train.name or "target", values=y_train.to_numpy())
+    if isinstance(x_val, pd.DataFrame):
+        x_val = pl.from_pandas(x_val)
+    if isinstance(y_val, pd.Series):
+        y_val = pl.Series(name=y_val.name or "target", values=y_val.to_numpy())
+
+    if feature_columns is None:
+        feature_columns = list(x_train.columns)
+    else:
+        feature_columns = list(feature_columns)
+
+    if scores is None:
+        scores = {}
 
     if not feature_columns:
         empty_report = pl.DataFrame(

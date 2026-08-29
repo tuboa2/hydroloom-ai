@@ -4,11 +4,11 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Final
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DATA_DIR = PROJECT_ROOT / "hydromind" / "data" / "processed"
-ARTIFACT_DIR: Final[Path] = PROJECT_ROOT / "hydromind" / "artifacts"
-MLFLOW_DIR: Final[Path] = PROJECT_ROOT / "hydromind" / "mlruns"
-LOG_DIR: Final[Path] = PROJECT_ROOT / "hydromind" / "logs"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DATA_DIR: Final[Path] = PROJECT_ROOT / "data" / "processed"
+ARTIFACT_DIR: Final[Path] = PROJECT_ROOT / "artifacts"
+MLFLOW_DIR: Final[Path] = PROJECT_ROOT / "mlruns"
+LOG_DIR: Final[Path] = PROJECT_ROOT / "logs"
 
 RANDOM_STATE: Final[int] = 42
 

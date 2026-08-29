@@ -80,13 +80,13 @@ class HemisphereData:
 
 _DEFAULT_SPECS = (
     [
-        StudySpec(model_family=f, loss_name=l, n_trials=200)
+        StudySpec(model_family=f, loss_name=loss_type, n_trials=200)
         for f in ("xgboost", "lightgbm")
-        for l in ("rmse", "logcosh", "huber", "quantile")
+        for loss_type in ("rmse", "logcosh", "huber", "quantile")
     ]
     + [
-        StudySpec(model_family="catboost", loss_name=l, n_trials=200)
-        for l in ("rmse", "logcosh", "mae")
+        StudySpec(model_family="catboost", loss_name=loss_type, n_trials=200)
+        for loss_type in ("rmse", "logcosh", "mae")
     ]
     + [StudySpec(model_family="linear", loss_name="diversity", n_trials=200)]
 )

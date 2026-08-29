@@ -8,8 +8,8 @@ import numpy as np
 import tl2cgen
 import xgboost as xgb
 
-from . import losses
 from ..config import ARTIFACT_DIR, EARLY_STOPPING_ROUNDS, RANDOM_STATE
+from . import losses
 
 logger = logging.getLogger(__name__)
 

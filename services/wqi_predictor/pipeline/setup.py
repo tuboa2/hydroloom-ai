@@ -1,10 +1,13 @@
 from __future__ import annotations
+
 import json
-import os
 import math
-import polars as pl
+import os
 from pathlib import Path
 from typing import Any
+
+import polars as pl
+
 from .. import config
 from ..data import drift
 from ..data.ingestion import load_hemisphere
@@ -15,9 +18,11 @@ from ..utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+
 def _save_parquet(dataframe: pl.DataFrame, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     dataframe.write_parquet(path)
+
 
 def _save_json(payload: Any, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -30,6 +35,7 @@ def _save_json(payload: Any, path: Path) -> None:
         )
     )
 
+
 def _drift_frames(split) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
     train_df = pl.concat([split.x_train, split.y_train.to_frame()], how="horizontal")
     val_df = pl.concat([split.x_val, split.y_val.to_frame()], how="horizontal")
@@ -37,16 +43,14 @@ def _drift_frames(split) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
 
     return train_df, val_df, test_df
 
+
 def _extract_column_metric(
     dataframe: pl.DataFrame,
     column: str,
     comparison: str,
     metric: str,
 ) -> float | None:
-    rows = dataframe.filter(
-        (pl.col("column") == column) & 
-        (pl.col("comparison") == comparison)
-    )
+    rows = dataframe.filter((pl.col("column") == column) & (pl.col("comparison") == comparison))
 
     if rows.is_empty():
         return None
@@ -57,15 +61,14 @@ def _extract_column_metric(
         return None
 
     return float(value)
+
 
 def _extract_comparison_metric(
     dataframe: pl.DataFrame,
     comparison: str,
     metric: str,
 ) -> float | None:
-    rows = dataframe.filter(
-        pl.col("comparison") == comparison
-    )
+    rows = dataframe.filter(pl.col("comparison") == comparison)
 
     if rows.is_empty():
         return None
@@ -77,16 +80,9 @@ def _extract_comparison_metric(
 
     return float(value)
 
-def _mean_psi(
-    dataframe: pl.DataFrame,
-    comparison: str
-) -> float | None:
-    values = (
-        dataframe
-        .filter(pl.col("comparison") == comparison)
-        .get_column("psi")
-        .drop_nulls()
-    )
+
+def _mean_psi(dataframe: pl.DataFrame, comparison: str) -> float | None:
+    values = dataframe.filter(pl.col("comparison") == comparison).get_column("psi").drop_nulls()
 
     if values.is_empty():
         return None
@@ -94,6 +90,7 @@ def _mean_psi(
     mean_val = values.mean()
 
     return float(mean_val) if mean_val is not None else None
+
 
 def _log_hemisphere_metrics(
     tracker: ExperimentTracker,
@@ -123,10 +120,7 @@ def _log_hemisphere_metrics(
             },
             "drift": {
                 "ks_wqi_train_vs_val": _extract_column_metric(
-                    ks,
-                    config.TARGET_COLUMN,
-                    "train_vs_val",
-                    "ks_statistic"
+                    ks, config.TARGET_COLUMN, "train_vs_val", "ks_statistic"
                 ),
                 "ks_wqi_train_vs_test": _extract_column_metric(
                     ks,
@@ -175,6 +169,7 @@ def _log_hemisphere_metrics(
 
     tracker.log_metrics(metrics)
 
+
 def run(tracking_enabled: bool = True) -> dict[str, Any]:
     logger.info("Starting setup pipeline (tracking=%s).", tracking_enabled)
     env_seed()
@@ -182,22 +177,19 @@ def run(tracking_enabled: bool = True) -> dict[str, Any]:
     config.ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
     config.MLFLOW_DIR.mkdir(parents=True, exist_ok=True)
 
-    mlflow_tracking_uri = os.getenv(
-        "MLFLOW_TRACKING_URI",
-        config.MLFLOW_DIR.as_uri()
-    )
+    mlflow_tracking_uri = os.getenv("MLFLOW_TRACKING_URI", config.MLFLOW_DIR.as_uri())
 
     tracking_config = TrackingConfig(
         run_name="preprocess-data-governance",
         mlflow_tracking_uri=mlflow_tracking_uri,
-        enabled=tracking_enabled
+        enabled=tracking_enabled,
     )
 
     summary: dict[str, Any] = {
         "phase": "preprocess",
         "random_state": config.RANDOM_STATE,
         "artifact_dir": str(config.ARTIFACT_DIR),
-        "hemispheres": {}
+        "hemispheres": {},
     }
 
     with ExperimentTracker(tracking_config) as tracker:
@@ -233,7 +225,9 @@ def run(tracking_enabled: bool = True) -> dict[str, Any]:
             drift_dir.mkdir(parents=True, exist_ok=True)
 
             _save_parquet(split.x_train, split_dir / "X_train.parquet")
-            _save_parquet(split.y_train.to_frame(config.TARGET_COLUMN), split_dir / "y_train.parquet")
+            _save_parquet(
+                split.y_train.to_frame(config.TARGET_COLUMN), split_dir / "y_train.parquet"
+            )
 
             _save_parquet(split.x_val, split_dir / "X_val.parquet")
             _save_parquet(
@@ -251,10 +245,7 @@ def run(tracking_enabled: bool = True) -> dict[str, Any]:
             drift_columns = list(split.x_train.columns) + [config.TARGET_COLUMN]
 
             ks_metrics = drift.compute_ks_metrics(
-                train_df=train_df,
-                val_df=val_df,
-                test_df=test_df,
-                columns=drift_columns
+                train_df=train_df, val_df=val_df, test_df=test_df, columns=drift_columns
             )
 
             psi_metrics = drift.compute_psi_metrics(
@@ -276,9 +267,7 @@ def run(tracking_enabled: bool = True) -> dict[str, Any]:
             )
             ks_metrics.write_csv(drift_dir / "ks_metrics.csv")
             psi_metrics.write_csv(drift_dir / "psi_metrics.csv")
-            adversarial_metrics.write_csv(
-                drift_dir / "adversarial_validation.csv"
-            )
+            adversarial_metrics.write_csv(drift_dir / "adversarial_validation.csv")
 
             metadata = {
                 "ingestion": ingested.metadata,
@@ -317,6 +306,6 @@ def run(tracking_enabled: bool = True) -> dict[str, Any]:
 
     return summary
 
+
 if __name__ == "__main__":
     run()
-            

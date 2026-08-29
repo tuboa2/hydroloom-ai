@@ -58,11 +58,19 @@ def _choose_collinear_drop(left: str, right: str) -> str:
 
 
 def run_screening(
-    x_train: pl.DataFrame,
+    x_train: pl.DataFrame | Any,
     feature_columns: Sequence[str] | None = None,
     missingness_threshold: float = 0.999,
     collinearity_threshold: float = 0.999999,
 ) -> tuple[list[str], dict[str, Any]]:
+    if not isinstance(x_train, pl.DataFrame):
+        import pandas as pd
+
+        if isinstance(x_train, pd.DataFrame):
+            x_train = pl.from_pandas(x_train)
+        else:
+            x_train = pl.DataFrame(x_train)
+
     if feature_columns is None:
         feature_columns = list(x_train.columns)
     else:
@@ -170,7 +178,6 @@ def run_screening(
 
     if len(numeric_columns) > 1:
         numeric_frame = x_train[numeric_columns].clone()
-        medians = numeric_frame.median()
         numeric_frame = numeric_frame.with_columns(pl.all().fill_null(pl.all().median()))
 
         correlation = numeric_frame.corr().select(pl.all().abs())
@@ -249,16 +256,20 @@ def run_screening(
             for feature in features:
                 dropped_records.append([stage, feature])
 
-        dropped_table = wandb.Table(columns=["Stage", "Feature"], data=dropped_records)
-        wandb.log({"screening/dropped_summary_table": dropped_table})
-
-        collinear_records = [
-            [p["feature_a"], p["feature_b"], p["abs_correlation"], p["dropped"]]
-            for p in collinear_pairs
-        ]
-        collinear_table = wandb.Table(
-            columns=["feature_a", "feature_b", "abs_correlation", "dropped"], data=collinear_records
-        )
-        wandb.log({"screening/collinear_pairs_table": collinear_table})
+        if collinear_pairs:
+            collinear_records = [
+                [p["feature_a"], p["feature_b"], p["abs_correlation"], p["dropped"]]
+                for p in collinear_pairs
+            ]
+            collinear_table = wandb.Table(
+                columns=["feature_a", "feature_b", "abs_correlation", "dropped"],
+                data=collinear_records,
+            )
+            wandb.log({"screening/collinear_pairs_table": collinear_table})
 
     return retained_final, report
+
+
+stage1_screening = run_screening
+
+__all__ = ["run_screening", "stage1_screening"]

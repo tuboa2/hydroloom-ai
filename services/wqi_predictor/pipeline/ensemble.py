@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -111,35 +112,58 @@ class Phase5EnsemblePipeline:
         test_path = self.data_dir / f"wqi_{self.hemisphere.value}_test.parquet"
 
         if train_path.exists() and val_path.exists() and test_path.exists():
-            return pl.read_parquet(train_path), pl.read_parquet(val_path), pl.read_parquet(test_path)
+            return (
+                pl.read_parquet(train_path),
+                pl.read_parquet(val_path),
+                pl.read_parquet(test_path),
+            )
 
         splits_dir = self.artifacts_root / "feature-engineer" / self.hemisphere.value / "splits"
         if splits_dir.exists():
-            x_tr_p = splits_dir / "X_train.parquet" if (splits_dir / "X_train.parquet").exists() else splits_dir / "x_train.parquet"
+            x_tr_p = (
+                splits_dir / "X_train.parquet"
+                if (splits_dir / "X_train.parquet").exists()
+                else splits_dir / "x_train.parquet"
+            )
             y_tr_p = splits_dir / "y_train.parquet"
-            x_val_p = splits_dir / "X_val.parquet" if (splits_dir / "X_val.parquet").exists() else splits_dir / "x_val.parquet"
+            x_val_p = (
+                splits_dir / "X_val.parquet"
+                if (splits_dir / "X_val.parquet").exists()
+                else splits_dir / "x_val.parquet"
+            )
             y_val_p = splits_dir / "y_val.parquet"
-            x_te_p = splits_dir / "X_test.parquet" if (splits_dir / "X_test.parquet").exists() else splits_dir / "x_test.parquet"
+            x_te_p = (
+                splits_dir / "X_test.parquet"
+                if (splits_dir / "X_test.parquet").exists()
+                else splits_dir / "x_test.parquet"
+            )
             y_te_p = splits_dir / "y_test.parquet"
 
-            if x_tr_p.exists() and y_tr_p.exists() and x_val_p.exists() and y_val_p.exists() and x_te_p.exists() and y_te_p.exists():
+            if (
+                x_tr_p.exists()
+                and y_tr_p.exists()
+                and x_val_p.exists()
+                and y_val_p.exists()
+                and x_te_p.exists()
+                and y_te_p.exists()
+            ):
                 x_train = pl.read_parquet(x_tr_p)
                 y_train = pl.read_parquet(y_tr_p)
                 if "water_quality_index" not in y_train.columns:
                     y_train = y_train.rename({y_train.columns[0]: "water_quality_index"})
-                train_df = pl.concat([x_train, y_train], how="horizontal")
+                train_df = x_train.hstack(y_train)
 
                 x_val = pl.read_parquet(x_val_p)
                 y_val = pl.read_parquet(y_val_p)
                 if "water_quality_index" not in y_val.columns:
                     y_val = y_val.rename({y_val.columns[0]: "water_quality_index"})
-                val_df = pl.concat([x_val, y_val], how="horizontal")
+                val_df = x_val.hstack(y_val)
 
                 x_test = pl.read_parquet(x_te_p)
                 y_test = pl.read_parquet(y_te_p)
                 if "water_quality_index" not in y_test.columns:
                     y_test = y_test.rename({y_test.columns[0]: "water_quality_index"})
-                test_df = pl.concat([x_test, y_test], how="horizontal")
+                test_df = x_test.hstack(y_test)
 
                 return train_df, val_df, test_df
 
@@ -157,7 +181,13 @@ class Phase5EnsemblePipeline:
         train_df, val_df, test_df = self._load_dataset_splits()
         test_path = self.data_dir / f"wqi_{self.hemisphere.value}_test.parquet"
         if not test_path.exists():
-            test_path = self.artifacts_root / "feature-engineer" / self.hemisphere.value / "splits" / "X_test.parquet"
+            test_path = (
+                self.artifacts_root
+                / "feature-engineer"
+                / self.hemisphere.value
+                / "splits"
+                / "X_test.parquet"
+            )
 
         y_train = train_df["water_quality_index"].to_numpy().astype(np.float64)
         y_val = val_df["water_quality_index"].to_numpy().astype(np.float64)
@@ -441,7 +471,9 @@ class Phase5EnsemblePipeline:
         ) as guard:
             x_test_np = test_df.select(selected_features).to_numpy().astype(np.float64, order="C")
             y_test_np = test_df["water_quality_index"].to_numpy().astype(np.float64)
-            x_hist_np = full_hist_df.select(selected_features).to_numpy().astype(np.float64, order="C")
+            x_hist_np = (
+                full_hist_df.select(selected_features).to_numpy().astype(np.float64, order="C")
+            )
             y_hist_np = full_hist_df["water_quality_index"].to_numpy().astype(np.float64)
 
             # Level-0 predictions on Test & Full Historical
@@ -560,6 +592,43 @@ class Phase5EnsemblePipeline:
             "residual_enabled": res_gate.enabled,
             "state": self.sm.current_state.value,
         }
+
+
+def run_ensemble(
+    hemisphere: str = "both",
+    data_dir: Path | None = None,
+    artifacts_path: Path | None = None,
+) -> dict[str, Any]:
+    """Execute Phase 5 Ensemble and Refit Pipeline for the specified hemisphere(s)."""
+    data_path = data_dir or Path(
+        os.environ.get("DATA_PATH") or os.environ.get("DATA_DIR") or "data/processed"
+    )
+    art_path = artifacts_path or Path(
+        os.environ.get("ARTIFACTS_PATH") or os.environ.get("ARTIFACTS_ROOT") or "artifacts"
+    )
+
+    hemispheres = (
+        [Hemisphere.NORTH, Hemisphere.SOUTH]
+        if hemisphere == "both"
+        else [Hemisphere(hemisphere.strip().lower())]
+    )
+
+    results = {}
+    for hemi in hemispheres:
+        pipeline = Phase5EnsemblePipeline(
+            hemisphere=hemi,
+            data_dir=data_path,
+            artifacts_path=art_path,
+        )
+        res = pipeline.run()
+        results[hemi.value] = res
+        logger.info(
+            "[PHASE 5 COMPLETE] %s Pipeline -> Status: %s, Test RMSE: %.4f",
+            hemi.value.upper(),
+            res["state"],
+            res["test_rmse"],
+        )
+    return results
 
 
 def main() -> None:

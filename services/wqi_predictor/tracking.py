@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 import math
 import os
-
-import mlflow
-import wandb
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
+
+import mlflow
+
+import wandb
 
 from .config import RANDOM_STATE
 from .utils.logging_config import get_logger
@@ -30,11 +32,7 @@ class TrackingConfig:
     enabled: bool = True
 
 
-def _flatten_dict(
-    data: Mapping[str, Any],
-    parent: str = "",
-    sep: str = "/"
-) -> dict[str, Any]:
+def _flatten_dict(data: Mapping[str, Any], parent: str = "", sep: str = "/") -> dict[str, Any]:
     flattened: dict[str, Any] = {}
     for key, value in data.items():
         full_key = f"{parent}{sep}{key}" if parent else str(key)
@@ -88,7 +86,7 @@ class ExperimentTracker:
         self._wandb_run = None
         self._mlflow_active = False
 
-    def __enter__(self) -> "ExperimentTracker":
+    def __enter__(self) -> ExperimentTracker:
         if not self._config.enabled:
             logger.info("Experiment tracking is disabled — skipping init.")
             return self
@@ -110,9 +108,7 @@ class ExperimentTracker:
         wandb_mode = self._config.wandb_mode
         if wandb_mode == "online" and not os.getenv("WANDB_API_KEY"):
             wandb_mode = "offline"
-            logger.warning(
-                "WANDB_API_KEY not set — falling back to offline mode."
-            )
+            logger.warning("WANDB_API_KEY not set — falling back to offline mode.")
 
         run_name = self._config.run_name or mlflow.active_run().info.run_name
         self._wandb_run = wandb.init(
@@ -123,7 +119,7 @@ class ExperimentTracker:
             config={
                 "experiment": self._config.experiment,
                 "seed": RANDOM_STATE,
-            }
+            },
         )
         logger.info(
             "W&B run initialized: name=%s, mode=%s, id=%s",
@@ -143,11 +139,7 @@ class ExperimentTracker:
         if self._wandb_run is not None:
             self._wandb_run.config.update(flat_params, allow_val_change=True)
 
-    def log_metrics(
-        self,
-        metrics: Mapping[str, Any],
-        step: int | None = None
-    ) -> None:
+    def log_metrics(self, metrics: Mapping[str, Any], step: int | None = None) -> None:
         if not self._config.enabled:
             return
         flat_metrics = _sanitize_metrics(_flatten_dict(metrics))

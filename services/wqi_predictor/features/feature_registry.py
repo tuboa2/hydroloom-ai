@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 
+
 @dataclass(frozen=True)
 class HemisphereFeatures:
     # explicitly lists the features and their scaling algorithms for a hemisphere
@@ -8,6 +9,7 @@ class HemisphereFeatures:
     power_transform: list[str] = field(default_factory=list)
     categorical: list[str] = field(default_factory=list)
     cluster: list[str] = field(default_factory=list)
+
 
 # north hemisphere feature configurations
 NORTH_REGISTRY = HemisphereFeatures(
@@ -30,16 +32,12 @@ NORTH_REGISTRY = HemisphereFeatures(
         "demand_x_runoff_pressure",
         "drought_x_heat_stress",
     ],
-    categorical=[
-        "season_label",
-        "tiered_pricing_regime",
-        "watering_ban_active"
-    ],
+    categorical=["season_label", "tiered_pricing_regime", "watering_ban_active"],
     cluster=[
         "cluster_heavy_users_daily_mean_liters_lag1",
         "cluster_conservationists_daily_mean_liters_lag1",
-        "cluster_standard_consumers_daily_mean_liters_lag1"
-    ]
+        "cluster_standard_consumers_daily_mean_liters_lag1",
+    ],
 )
 
 SOUTH_REGISTRY = HemisphereFeatures(
@@ -60,18 +58,12 @@ SOUTH_REGISTRY = HemisphereFeatures(
         "nutrient_load_index",
         "heat_x_nutrient_synergy",
     ],
-    categorical = [
+    categorical=[
         "cluster_heavy_users_daily_mean_liters",
         "cluster_conservationists_daily_mean_liters",
         "cluster_standard_consumers_daily_mean_liters",
-        "cluster_outdoor_landscape_daily_mean_liters"
-    ]
+        "cluster_outdoor_landscape_daily_mean_liters",
+    ],
 )
 
-BLACKLIST = [
-    "hemisphere",
-    "day_index",
-    "year_index",
-    "is_weekend",
-    "holiday_weekend_flag"
-]
+BLACKLIST = ["hemisphere", "day_index", "year_index", "is_weekend", "holiday_weekend_flag"]

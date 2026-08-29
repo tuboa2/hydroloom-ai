@@ -142,7 +142,11 @@ def verify_candidate_integrity(
         if not hyperparameters and cand.get("artifact_dir"):
             art_p = Path(cand["artifact_dir"])
             if not art_p.is_absolute():
-                art_p = artifacts_root.parent / art_p if not (artifacts_root / art_p).exists() else artifacts_root / art_p
+                art_p = (
+                    artifacts_root.parent / art_p
+                    if not (artifacts_root / art_p).exists()
+                    else artifacts_root / art_p
+                )
             best_params_p = art_p / "best_params.json"
             if best_params_p.exists():
                 try:

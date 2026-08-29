@@ -2,19 +2,19 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 
-class Hemisphere(str, Enum):
+class Hemisphere(StrEnum):
     NORTH = "north"
     SOUTH = "south"
 
 
-class EnsembleStrategy(str, Enum):
+class EnsembleStrategy(StrEnum):
     CONSTRAINED_WEIGHTED = "constrained_weighted_average"
     RIDGE_STACK = "ridge_stack"
     ELASTICNET_STACK = "elasticnet_stack"
@@ -23,7 +23,7 @@ class EnsembleStrategy(str, Enum):
     MEAN_MEDIAN_BLEND = "mean_median_blend"
 
 
-class WQIState(str, Enum):
+class WQIState(StrEnum):
     INITIALIZED = "INITIALIZED"
     INPUTS_VERIFIED = "INPUTS_VERIFIED"
     CANDIDATES_FROZEN = "CANDIDATES_FROZEN"
@@ -39,7 +39,7 @@ class WQIState(str, Enum):
     REGISTERED = "REGISTERED"
 
 
-class WQIZone(str, Enum):
+class WQIZone(StrEnum):
     CRITICAL = "Critical"  # 0 <= WQI < 25
     POOR = "Poor"  # 25 <= WQI < 50
     MARGINAL = "Marginal"  # 50 <= WQI < 70

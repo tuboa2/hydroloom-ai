@@ -17,3 +17,8 @@ def env_seed(seed: int = RANDOM_STATE) -> None:
     random.seed(seed)
     np.random.seed(seed)
     logger.info("Global random seed set to %d.", seed)
+
+
+seed_everything = env_seed
+
+__all__ = ["RANDOM_STATE", "env_seed", "seed_everything"]

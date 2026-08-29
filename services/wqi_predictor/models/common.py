@@ -275,17 +275,15 @@ def save_candidate_artifacts(
 
     futures = []
 
+    futures.append(_IO_POOL.submit(joblib.dump, model, resolved_dir / "model.joblib", compress=3))
     futures.append(
-        _IO_POOL.submit(joblib.dump, model, resolved_dir / "model.joblib", compress=3)
-    )
-    futures.append(
-        _IO_POOL.submit(
-            joblib.dump, preprocessor, resolved_dir / "preprocessor.joblib", compress=3
-        )
+        _IO_POOL.submit(joblib.dump, preprocessor, resolved_dir / "preprocessor.joblib", compress=3)
     )
 
     futures.append(_IO_POOL.submit(write_json, resolved_dir / "best_params.json", best_params))
-    futures.append(_IO_POOL.submit(write_json, resolved_dir / "val_metrics.json", resolved_val_metrics))
+    futures.append(
+        _IO_POOL.submit(write_json, resolved_dir / "val_metrics.json", resolved_val_metrics)
+    )
 
     cv_path = resolved_dir / "cv_metrics.csv"
     if cv_metrics is not None:

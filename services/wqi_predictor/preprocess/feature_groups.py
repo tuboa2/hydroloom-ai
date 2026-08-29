@@ -148,6 +148,7 @@ FAMILY_PRIORITY: Final[dict[str, int]] = {
     "calendar": 70,
 }
 
+
 def infer_feature_family(column: str) -> str:
     if column in POLICY_COLUMNS or column in POLICY_INTERACTION_COLUMNS:
         return "policy"
@@ -172,12 +173,11 @@ def infer_feature_family(column: str) -> str:
 
     return "raw_environment"
 
+
 def assign_numeric_transformer(column: str) -> str:
     if column in CALENDAR_COLUMNS or column.startswith(("day_of_year_", "month_")):
         return "standard"
-    if column in NEAR_NORMAL_BASES or any(
-        column.startswith(base) for base in NEAR_NORMAL_BASES
-    ):
+    if column in NEAR_NORMAL_BASES or any(column.startswith(base) for base in NEAR_NORMAL_BASES):
         return "standard"
     if column in RAW_CLUSTER_FEATURES or any(
         column.startswith(base) for base in RAW_CLUSTER_FEATURES
@@ -194,9 +194,7 @@ def assign_numeric_transformer(column: str) -> str:
         return "robust"
     if column.startswith(("wqi_", "seasonal_wqi_")):
         return "robust"
-    if column in MODERATE_BASES or any(
-        column.startswith(base) for base in MODERATE_BASES
-    ):
+    if column in MODERATE_BASES or any(column.startswith(base) for base in MODERATE_BASES):
         return "robust"
     if any(column.endswith(suffix) for suffix in DERIVED_SUFFIXES):
         return "robust"

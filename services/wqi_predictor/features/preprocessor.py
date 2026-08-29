@@ -1,10 +1,14 @@
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler, RobustScaler, PowerTransformer, OrdinalEncoder
-from category_encoders import LeaveOneOutEncoder
 from typing import Literal
 
-def build_preprocessor(hemisphere: Literal["north", "south"], use_loo_te: bool = True) -> ColumnTransformer:
+from category_encoders import LeaveOneOutEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OrdinalEncoder, PowerTransformer, RobustScaler, StandardScaler
+
+
+def build_preprocessor(
+    hemisphere: Literal["north", "south"], use_loo_te: bool = True
+) -> ColumnTransformer:
     # constructs the column transformer pipeline dynamically
     transformers = []
 
@@ -14,7 +18,7 @@ def build_preprocessor(hemisphere: Literal["north", "south"], use_loo_te: bool =
         "cluster_heavy_users_daily_mean_liters",
         "cluster_conservationists_daily_mean_liters",
         "cluster_standard_consumers_daily_mean_liters",
-        "cluster_outdoor_landscape_daily_mean_liters"
+        "cluster_outdoor_landscape_daily_mean_liters",
     ]
 
     if hemisphere == "north":
@@ -37,7 +41,7 @@ def build_preprocessor(hemisphere: Literal["north", "south"], use_loo_te: bool =
         "daily_runoff_volume_m3",
         "total_suspended_solids_mg_L",
         "nutrient_load_index",
-        "heat_x_nutrient_synergy"
+        "heat_x_nutrient_synergy",
     ]
 
     if hemisphere == "north":
@@ -47,24 +51,27 @@ def build_preprocessor(hemisphere: Literal["north", "south"], use_loo_te: bool =
     # categorical encodings
     if hemisphere == "north":
         if use_loo_te:
-            transformers.append((
-                "loo_te",
-                LeaveOneOutEncoder(sigma=0.05, random_state=42),
-                ["season_label"]
-            ))
+            transformers.append(
+                ("loo_te", LeaveOneOutEncoder(sigma=0.05, random_state=42), ["season_label"])
+            )
         else:
-            transformers.append((
-                "ordinal_season",
+            transformers.append(
+                (
+                    "ordinal_season",
+                    OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1),
+                    ["season_label"],
+                )
+            )
+        transformers.append(
+            (
+                "ordinal_polcy",
                 OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1),
-                ["season_label"]
-            ))
-        transformers.append((
-            "ordinal_polcy",
-            OrdinalEncoder(handle_unknown="use_encoded_value",  unknown_value=-1),
-            ["tiered_pricing_regime", "watering_ban_active"]
-        ))
+                ["tiered_pricing_regime", "watering_ban_active"],
+            )
+        )
 
     return ColumnTransformer(transformers=transformers, remainder="drop")
+
 
 def get_pipeline(hemisphere: Literal["north", "south"], model=None) -> Pipeline:
     preprocessor = build_preprocessor(hemisphere)
@@ -72,4 +79,3 @@ def get_pipeline(hemisphere: Literal["north", "south"], model=None) -> Pipeline:
     if model is not None:
         steps.append(("model", model))
     return Pipeline(steps=steps)
-    

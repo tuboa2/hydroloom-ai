@@ -235,19 +235,18 @@ def add_cluster_lag_features(
     source: pl.DataFrame,
     config: HemisphereFeatureConfig,
 ) -> pl.DataFrame:
-    out = source.clone()
     lag = config.cluster_optimal_lag
 
     if lag <= 0:
-        return out
+        return source.select([])
 
     cluster_lag_features = []
 
     for column in CLUSTER_COLUMNS:
-        if column not in out.columns:
+        if column not in source.columns:
             continue
 
-        series = out[column].cast(pl.Float64)
+        series = source[column].cast(pl.Float64)
         past_expanding_mean = _past_expanding_mean(series, 0.0)
 
         lagged = (
@@ -260,9 +259,9 @@ def add_cluster_lag_features(
         cluster_lag_features.append(lagged)
 
     if not cluster_lag_features:
-        return out
+        return source.select([])
 
-    return out.with_columns(cluster_lag_features)
+    return source.select(cluster_lag_features)
 
 
 def add_domain_interactions(
@@ -270,76 +269,82 @@ def add_domain_interactions(
     config: HemisphereFeatureConfig,
 ) -> pl.DataFrame:
     logger.debug("Adding domain interaction features.")
-    out = source.clone()
+    interaction_cols: list[pl.Expr] = []
 
-    def add_product(left: str, right: str, name: str):
-        nonlocal out
-        out = out.with_columns(
-            (pl.col(left).cast(pl.Float64) * pl.col(right).cast(pl.Float64)).alias(name)
-        )
+    def make_product(left: str, right: str, name: str) -> None:
+        if left in source.columns and right in source.columns:
+            col = (
+                (pl.col(left).cast(pl.Float64) * pl.col(right).cast(pl.Float64))
+                .fill_null(0.0)
+                .alias(name)
+            )
+            interaction_cols.append(col)
 
-    add_product(
+    make_product(
         "daily_rainfall_mm",
         "antecedent_moisture_condition",
         "rainfall_x_antecedent_moisture",
     )
 
-    add_product(
+    make_product(
         "cumulative_storm_rainfall_mm",
         "total_suspended_solids_mg_L",
         "storm_rainfall_x_tss",
     )
 
-    add_product(
+    make_product(
         "daily_runoff_volume_m3",
         "total_suspended_solids_mg_L",
         "runoff_x_tss",
     )
 
-    add_product(
+    make_product(
         "temp_anomaly_celsius",
         "nutrient_load_index",
         "temp_anomaly_x_nutrient_load",
     )
 
-    add_product(
+    make_product(
         "cumulative_heat_index",
         "consecutive_dry_days",
         "heat_x_dry_days",
     )
 
-    add_product(
+    make_product(
         "rolling_7d_rainfall_mm",
         "nutrient_load_index",
         "rolling_rain_x_nutrient_load",
     )
 
-    add_product(
+    make_product(
         "daily_runoff_volume_m3",
         "nutrient_load_index",
         "runoff_x_nutrient_load",
     )
 
-    add_product(
+    make_product(
         "cumulative_heat_index",
         "daily_runoff_volume_m3",
         "heat_x_runoff",
     )
 
     if config.include_policy_interactions:
-        add_product(
+        make_product(
             "watering_ban_active",
             "cluster_outdoor_landscape_daily_mean_liters",
             "watering_ban_x_outdoor_landscape_cluster",
         )
 
-        add_product(
+        make_product(
             "tiered_pricing_regime",
             "cluster_standard_consumers_daily_mean_liters",
             "tiered_pricing_x_standard_consumer_cluster",
         )
 
-    return out.fill_null(0.0)
+    if not interaction_cols:
+        return source.select([])
+
+    return source.select(interaction_cols)
 
 
 def add_cluster_aggregates(
@@ -350,7 +355,7 @@ def add_cluster_aggregates(
     cluster_columns = [column for column in CLUSTER_COLUMNS if column in source.columns]
 
     if not cluster_columns:
-        return source
+        return source.select([])
 
     cluster_frame = source.select(pl.col(cluster_columns).cast(pl.Float64))
 
@@ -384,7 +389,7 @@ def add_cluster_aggregates(
             .alias("heavy_to_conservation_ratio")
         )
 
-    out = source.with_columns(exprs)
+    out = source.select(exprs)
 
     scaler = StandardScaler()
     train_cluster_values = cluster_frame.filter(train_mask)

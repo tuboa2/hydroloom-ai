@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import hashlib
-
-import polars as pl
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
+
+import polars as pl
 
 from .. import config
 from ..utils.logging_config import get_logger
@@ -36,9 +36,7 @@ def assert_no_future_leakage_columns(dataframe: pl.DataFrame) -> None:
     ]
 
     if future_columns:
-        logger.error(
-            "Future-leakage columns detected: %s", sorted(future_columns)
-        )
+        logger.error("Future-leakage columns detected: %s", sorted(future_columns))
         raise validator.DataValidationError(
             f"Future-leakage columns are forbidden: {sorted(future_columns)}."
         )
@@ -60,9 +58,7 @@ def drop_forbidden_columns(dataframe: pl.DataFrame) -> tuple[pl.DataFrame, list[
 
 def build_feature_frame(dataframe: pl.DataFrame) -> pl.DataFrame:
     drop_columns = [column for column in config.FEATURE_EXCLUSIONS if column in dataframe.columns]
-    logger.debug(
-        "Building feature frame — dropping %d exclusion columns.", len(drop_columns)
-    )
+    logger.debug("Building feature frame — dropping %d exclusion columns.", len(drop_columns))
     return dataframe.drop(drop_columns)
 
 
@@ -80,10 +76,7 @@ def _target_metadata(target: pl.Series) -> dict[str, Any]:
     }
 
 
-def load_hemisphere(
-    hemisphere: str,
-    data_dir: Path | None = None
-) -> IngestedHemisphere:
+def load_hemisphere(hemisphere: str, data_dir: Path | None = None) -> IngestedHemisphere:
     """Load, validate, and prepare a hemisphere dataset for downstream processing.
 
     Args:
@@ -150,8 +143,7 @@ def load_hemisphere(
     }
 
     logger.info(
-        "Ingestion complete for %s: features=%d, null_count=%d, "
-        "target_mean=%.4f, target_std=%.4f",
+        "Ingestion complete for %s: features=%d, null_count=%d, target_mean=%.4f, target_std=%.4f",
         hemisphere,
         metadata["feature_count"],
         null_count,

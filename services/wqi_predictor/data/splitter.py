@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import polars as pl
 from dataclasses import dataclass
 from typing import Any, Literal
+
+import polars as pl
 
 from .. import config
 from ..utils.logging_config import get_logger
@@ -23,6 +24,14 @@ class ChronologicalSplit:
     y_test: pl.Series
     metadata: dict[str, Any]
 
+    @property
+    def x_validation(self) -> pl.DataFrame:
+        return self.x_val
+
+    @property
+    def y_validation(self) -> pl.Series:
+        return self.y_val
+
 
 def to_float(val):
     return float(val) if val is not None else None
@@ -34,7 +43,7 @@ def _series_summary(series: pl.Series) -> dict[str, Any]:
         "std": to_float(series.std()),
         "min": to_float(series.min()),
         "max": to_float(series.max()),
-        "zero_count": int((series == 0).sum())
+        "zero_count": int((series == 0).sum()),
     }
 
 
@@ -114,7 +123,7 @@ def split_chronologically(ingested: IngestedHemisphere) -> ChronologicalSplit:
             "validation": _series_summary(y_val),
             "test": _series_summary(y_test),
         },
-        "feature_columns": list(features.columns)
+        "feature_columns": list(features.columns),
     }
 
     return ChronologicalSplit(

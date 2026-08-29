@@ -1,4 +1,7 @@
 from __future__ import annotations
+
+from typing import Any
+
 import numpy as np
 import polars as pl
 import polars.selectors as cs
@@ -9,12 +12,14 @@ from sklearn.impute import SimpleImputer
 from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OrdinalEncoder
+
 from .. import config
 from ..utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
 EPSILON = 1e-6
+
 
 def _psi_category(psi: float) -> str:
     if np.isnan(psi):
@@ -25,7 +30,12 @@ def _psi_category(psi: float) -> str:
         return "moderate_drift"
     return "significant_drift"
 
-def _psi_numeric(base_values: np.ndarray, compare_values: np.ndarray, bins: int) -> float:
+
+def _psi_numeric(
+    base_values: np.ndarray | Any, compare_values: np.ndarray | Any, bins: int
+) -> float:
+    base_values = np.asarray(base_values, dtype=float)
+    compare_values = np.asarray(compare_values, dtype=float)
 
     if base_values.size == 0 or compare_values.size == 0:
         return np.nan
@@ -51,6 +61,7 @@ def _psi_numeric(base_values: np.ndarray, compare_values: np.ndarray, bins: int)
     psi = np.sum((compare_pct - base_pct) * np.log(compare_pct / base_pct))
     return float(psi)
 
+
 def _psi_categorical(base_values: pl.Series, compare_values: pl.Series) -> float:
 
     if base_values.is_empty() or compare_values.is_empty():
@@ -62,33 +73,33 @@ def _psi_categorical(base_values: pl.Series, compare_values: pl.Series) -> float
     compare_counts = compare_values.value_counts(normalize=True)
 
     aligned = (
-        categories_df
-        .join(base_counts, left_on="category", right_on=base_counts.columns[0], how="left")
+        categories_df.join(
+            base_counts, left_on="category", right_on=base_counts.columns[0], how="left"
+        )
         .join(compare_counts, left_on="category", right_on=compare_counts.columns[0], how="left")
-        .select([
-            (pl.col(base_counts.columns[1]).fill_null(0.0) + EPSILON).alias("base_pct"),
-            (pl.col(compare_counts.columns[1]).fill_null(0.0) + EPSILON).alias("compare_pct"),
-        ])
+        .select(
+            [
+                (pl.col(base_counts.columns[1]).fill_null(0.0) + EPSILON).alias("base_pct"),
+                (pl.col(compare_counts.columns[1]).fill_null(0.0) + EPSILON).alias("compare_pct"),
+            ]
+        )
     )
 
     psi = aligned.select(
-        ((pl.col("compare_pct") - pl.col("base_pct")) * (pl.col("compare_pct") / pl.col("base_pct")).log()).sum()
+        (
+            (pl.col("compare_pct") - pl.col("base_pct"))
+            * (pl.col("compare_pct") / pl.col("base_pct")).log()
+        ).sum()
     ).item()
 
     return float(psi)
 
+
 def compute_ks_metrics(
-    train_df: pl.DataFrame,
-    val_df: pl.DataFrame,
-    test_df: pl.DataFrame,
-    columns: list[str]
+    train_df: pl.DataFrame, val_df: pl.DataFrame, test_df: pl.DataFrame, columns: list[str]
 ) -> pl.DataFrame:
     logger.info("Computing KS drift metrics across %d columns.", len(columns))
-    dataframes = {
-        "train": train_df,
-        "validation": val_df,
-        "test": test_df
-    }
+    dataframes = {"train": train_df, "validation": val_df, "test": test_df}
 
     comparisons = [
         ("train_vs_validation", "train", "validation"),
@@ -101,13 +112,13 @@ def compute_ks_metrics(
     for column in columns:
         if not train_df[column].dtype.is_numeric():
             continue
-            
+
         cached_arrays = {
             "train": dataframes["train"][column].drop_nulls().to_numpy().astype(float),
             "validation": dataframes["validation"][column].drop_nulls().to_numpy().astype(float),
             "test": dataframes["test"][column].drop_nulls().to_numpy().astype(float),
         }
-           
+
         for comparison_name, base_key, compare_key in comparisons:
             base = cached_arrays[base_key]
             compare = cached_arrays[compare_key]
@@ -125,12 +136,13 @@ def compute_ks_metrics(
                     "column": column,
                     "comparison": comparison_name,
                     "ks_statistic": statistic,
-                    "ks_p_value": p_value
+                    "ks_p_value": p_value,
                 }
             )
 
     logger.info("KS drift metrics computed: %d records.", len(records))
     return pl.DataFrame(records)
+
 
 def compute_psi_metrics(
     train_df: pl.DataFrame,
@@ -142,24 +154,23 @@ def compute_psi_metrics(
     comparisons = [
         ("train_as_base_vs_validation", "train", "validation"),
         ("train_as_base_vs_test", "train", "test"),
-        ("validation_as_base_vs_test", "validation", "test")
+        ("validation_as_base_vs_test", "validation", "test"),
     ]
-    
-    dataframes = {
-        "train": train_df,
-        "validation": val_df,
-        "test": test_df
-    }
+
+    dataframes = {"train": train_df, "validation": val_df, "test": test_df}
 
     records: list[dict[str, object]] = []
 
     for column in columns:
         is_numeric = train_df.schema[column].is_numeric()
-        
+
         if is_numeric:
             cached_data = {
                 "train": dataframes["train"][column].drop_nulls().to_numpy().astype(float),
-                "validation": dataframes["validation"][column].drop_nulls().to_numpy().astype(float),
+                "validation": dataframes["validation"][column]
+                .drop_nulls()
+                .to_numpy()
+                .astype(float),
                 "test": dataframes["test"][column].drop_nulls().to_numpy().astype(float),
             }
         else:
@@ -171,11 +182,7 @@ def compute_psi_metrics(
 
         for comparison_name, base_key, compare_key in comparisons:
             if is_numeric:
-                psi = _psi_numeric(
-                    cached_data[base_key],
-                    cached_data[compare_key],
-                    config.PSI_BINS
-                )
+                psi = _psi_numeric(cached_data[base_key], cached_data[compare_key], config.PSI_BINS)
             else:
                 psi = _psi_categorical(cached_data[base_key], cached_data[compare_key])
 
@@ -191,17 +198,13 @@ def compute_psi_metrics(
     logger.info("PSI drift metrics computed: %d records.", len(records))
     return pl.DataFrame(records)
 
+
 def _adversarial_auc(
-    base_features: pl.DataFrame,
-    compare_features: pl.DataFrame,
-    random_state: int
+    base_features: pl.DataFrame, compare_features: pl.DataFrame, random_state: int
 ) -> dict[str, float | int]:
     x = pl.concat([base_features, compare_features])
     y = np.concatenate(
-        [
-            np.zeros(len(base_features), dtype=int),
-            np.ones(len(compare_features), dtype=int)
-        ]
+        [np.zeros(len(base_features), dtype=int), np.ones(len(compare_features), dtype=int)]
     )
 
     if x.is_empty() or len(np.unique(y)) < 2:
@@ -209,7 +212,7 @@ def _adversarial_auc(
             "auc_mean": np.nan,
             "auc_std": np.nan,
             "n_base": int(len(base_features)),
-            "n_compare": int(len(compare_features))
+            "n_compare": int(len(compare_features)),
         }
 
     numeric_features = x.select(cs.numeric()).columns
@@ -243,10 +246,7 @@ def _adversarial_auc(
                         ("imputer", SimpleImputer(strategy="most_frequent")),
                         (
                             "encoder",
-                            OrdinalEncoder(
-                                handle_unknown="use_encoded_value",
-                                unknown_value=-1
-                            ),
+                            OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1),
                         ),
                     ]
                 ),
@@ -258,25 +258,13 @@ def _adversarial_auc(
     x_processed = preprocessor.fit_transform(x)
 
     model = HistGradientBoostingClassifier(
-        random_state=random_state,
-        early_stopping=False,
-        max_iter=100,
-        learning_rate=0.1
+        random_state=random_state, early_stopping=False, max_iter=100, learning_rate=0.1
     )
 
-    cv = StratifiedKFold(
-        n_splits=5,
-        shuffle=True,
-        random_state=random_state
-    )
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=random_state)
 
     scores = cross_val_score(
-        estimator=model,
-        X=x_processed,
-        y=y,
-        cv=cv,
-        scoring="roc_auc",
-        n_jobs=-1
+        estimator=model, X=x_processed, y=y, cv=cv, scoring="roc_auc", n_jobs=-1
     )
 
     return {
@@ -285,7 +273,8 @@ def _adversarial_auc(
         "n_base": int(len(base_features)),
         "n_compare": int(len(compare_features)),
     }
-    
+
+
 def compute_adversarial_validation(
     train_features: pl.DataFrame,
     val_features: pl.DataFrame,
@@ -309,7 +298,7 @@ def compute_adversarial_validation(
             metrics.get("auc_mean", float("nan")),
             metrics.get("auc_std", float("nan")),
         )
-        records.append({ "comparison": comparison_name, **metrics })
+        records.append({"comparison": comparison_name, **metrics})
 
     logger.info("Adversarial validation complete: %d comparisons.", len(records))
     return pl.DataFrame(records)

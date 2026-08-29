@@ -87,8 +87,7 @@ def trial_to_result(
     loss_name: str,
 ) -> BestTrialResult:
     records = trial.user_attrs.get("fold_records") or [
-        {"fold": idx, "rmse": val}
-        for idx, val in enumerate(trial.user_attrs.get("fold_rmse", []))
+        {"fold": idx, "rmse": val} for idx, val in enumerate(trial.user_attrs.get("fold_rmse", []))
     ]
     return BestTrialResult(
         study_name=study_name,
@@ -113,9 +112,7 @@ def get_top_trials(
     loss_name: str,
     top_k: int = 15,
 ) -> list[BestTrialResult]:
-    completed = [
-        t for t in study.get_trials(states=(TrialState.COMPLETE,)) if t.value is not None
-    ]
+    completed = [t for t in study.get_trials(states=(TrialState.COMPLETE,)) if t.value is not None]
     if not completed:
         return []
     completed.sort(key=lambda t: t.value)
@@ -293,7 +290,9 @@ def run(
         logger.info("Trial budget satisfied. Skipping optimization.")
 
     if top_k > 1:
-        top_trials = get_top_trials(study, study_name, hemisphere, model_family, loss_name, top_k=top_k)
+        top_trials = get_top_trials(
+            study, study_name, hemisphere, model_family, loss_name, top_k=top_k
+        )
         if not top_trials:
             raise ModelError(f"No completed Optuna trials for study: {study_name}")
         return top_trials

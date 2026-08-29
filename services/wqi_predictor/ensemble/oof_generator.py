@@ -39,7 +39,6 @@ def generate_oof_matrix(
     y_train_np = train_df[target_col].to_numpy().astype(np.float64)
 
     x_val_np = val_df.select(selected_features).to_numpy().astype(np.float64, order="C")
-    y_val_np = val_df[target_col].to_numpy().astype(np.float64)
 
     oof_matrix = np.full((n_train, n_models), fill_value=np.nan, dtype=np.float64, order="C")
     val_preds_matrix = np.zeros((n_val, n_models), dtype=np.float64, order="C")

@@ -16,7 +16,6 @@ from ..config import (
     VALIDATION_YEAR,
     YEAR_INDEX_COLUMN,
 )
-from ..utils.logging_config import get_logger
 from ..data.ingestion import IngestedHemisphere
 from ..features.registry import (
     COMMON_EXCLUDED_COLUMNS,
@@ -33,6 +32,7 @@ from ..features.temporal import (
     add_seasonal_target_encoding,
     add_target_features,
 )
+from ..utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -100,13 +100,13 @@ def build_engineered_dataset(
 
     seen_cols = set()
     cleaned_pieces = []
-    
+
     for piece in pieces:
         new_cols = [col for col in piece.columns if col not in seen_cols]
         if new_cols:
             cleaned_pieces.append(piece.select(new_cols))
             seen_cols.update(new_cols)
-    
+
     engineered = pl.concat(cleaned_pieces, how="horizontal")
     engineered = engineered.select(list(dict.fromkeys(engineered.columns)))
     engineered = engineered.drop(
@@ -124,9 +124,7 @@ def build_engineered_dataset(
 
     engineered[numeric_columns] = engineered[numeric_columns].fill_null(0.0)
     if categorical_columns:
-        engineered = engineered.with_columns(
-            pl.col(categorical_columns).fill_null("missing")
-        )
+        engineered = engineered.with_columns(pl.col(categorical_columns).fill_null("missing"))
 
     null_columns = [
         col
