@@ -1,12 +1,14 @@
 from __future__ import annotations
+
 import logging
+from pathlib import Path
+from typing import Literal
+
 import joblib
 import numpy as np
 import polars as pl
-from pathlib import Path
 from numpy.random import Generator
 from sklearn.cluster import KMeans
-from typing import Literal
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +34,8 @@ MIN_CLUSTER_SIZE = 10
 # Expected number of clusters from Service B
 EXPECTED_N_CLUSTERS = 4
 
-def resolve_archetype_mapping(kmeans_model: KMeans) -> dict[int, str]: 
+
+def resolve_archetype_mapping(kmeans_model: KMeans) -> dict[int, str]:
     centers = kmeans_model.cluster_centers_
 
     # ── Pre-conditions ──
@@ -55,9 +58,7 @@ def resolve_archetype_mapping(kmeans_model: KMeans) -> dict[int, str]:
 
     # Remaining two clusters: differentiated by landscape_demand_index (col 3)
     remaining = [i for i in range(EXPECTED_N_CLUSTERS) if i not in labels]
-    assert len(remaining) == 2, (
-        f"Expected 2 remaining clusters, got {len(remaining)}"
-    )
+    assert len(remaining) == 2, f"Expected 2 remaining clusters, got {len(remaining)}"
 
     landscape_indices = centers[:, 3]
     if landscape_indices[remaining[0]] > landscape_indices[remaining[1]]:
@@ -92,19 +93,16 @@ def predict_cluster_labels(
     scaled_features: np.ndarray,
 ) -> np.ndarray:
     # ── Pre-conditions ──
-    assert scaled_features.ndim == 2, (
-        f"Expected 2D array, got {scaled_features.ndim}D"
-    )
+    assert scaled_features.ndim == 2, f"Expected 2D array, got {scaled_features.ndim}D"
     n_features = kmeans_model.cluster_centers_.shape[1]
     assert scaled_features.shape[1] == n_features, (
-        f"Feature count mismatch: input has {scaled_features.shape[1]}, "
-        f"model expects {n_features}"
+        f"Feature count mismatch: input has {scaled_features.shape[1]}, model expects {n_features}"
     )
 
     # 1. Enforce 64-bit precision on the input data
     features_64bit = scaled_features.astype(np.float64)
-    
-    # 2. Patch the scikit-learn version mismatch by enforcing 64-bit precision 
+
+    # 2. Patch the scikit-learn version mismatch by enforcing 64-bit precision
     # on the unpickled model's internal cluster centers.
     kmeans_model.cluster_centers_ = kmeans_model.cluster_centers_.astype(np.float64)
 
@@ -115,28 +113,24 @@ def predict_cluster_labels(
     assert labels.shape == (scaled_features.shape[0],), (
         f"Label shape mismatch: expected {(scaled_features.shape[0],)}, got {labels.shape}"
     )
-    
+
     unique_labels = set(np.unique(labels))
-    assert unique_labels.issubset({0, 1, 2, 3}), (
-        f"Unexpected cluster labels: {unique_labels}"
-    )
+    assert unique_labels.issubset({0, 1, 2, 3}), f"Unexpected cluster labels: {unique_labels}"
 
     return labels
-    
+
+
 def subsample_household_indices(
     n_households: int,
     subsample_size: int,
     rng: Generator,
-) -> np.ndarray:  
+) -> np.ndarray:
     # ── Pre-conditions ──
     if subsample_size <= 0:
-        raise ValueError(
-            f"subsample_size must be > 0, got {subsample_size}"
-        )
+        raise ValueError(f"subsample_size must be > 0, got {subsample_size}")
     if subsample_size > n_households:
         raise ValueError(
-            f"subsample_size ({subsample_size}) cannot exceed "
-            f"n_households ({n_households})"
+            f"subsample_size ({subsample_size}) cannot exceed n_households ({n_households})"
         )
 
     indices = rng.choice(n_households, size=subsample_size, replace=False)
@@ -175,9 +169,7 @@ def compute_cluster_daily_means(
         mask = cluster_labels == cluster_id
         cluster_count = int(mask.sum())
 
-        feature_name = CLUSTER_FEATURE_TEMPLATE.format(
-            archetype=archetype_name
-        )
+        feature_name = CLUSTER_FEATURE_TEMPLATE.format(archetype=archetype_name)
 
         if cluster_count == 0:
             # Edge case: empty cluster after subsampling.
@@ -207,23 +199,19 @@ def compute_cluster_daily_means(
         # Time: O(cluster_count × n_days)
         # Memory: O(cluster_count × n_days) for the masked view (no copy
         # with basic indexing in NumPy when mask is boolean)
-        cluster_mean = water_usage_matrix[mask, :].mean(axis=0).astype(
-            np.float32
-        )
+        cluster_mean = water_usage_matrix[mask, :].mean(axis=0).astype(np.float32)
 
         # ── Loop invariant: no NaN values after mean ──
         # NaN can only occur if cluster_count == 0, which is handled above.
         assert not np.any(np.isnan(cluster_mean)), (
-            f"NaN detected in {feature_name} mean. "
-            f"Cluster count: {cluster_count}"
+            f"NaN detected in {feature_name} mean. Cluster count: {cluster_count}"
         )
 
         # ── Loop invariant: all values non-negative ──
         # Water usage matrix is guaranteed non-negative by
         # HouseholdDemographicSimulator's physiological floor.
         assert np.all(cluster_mean >= 0), (
-            f"Negative values in {feature_name}. "
-            f"Min: {cluster_mean.min():.4f}"
+            f"Negative values in {feature_name}. Min: {cluster_mean.min():.4f}"
         )
 
         # Round to 2 decimal places, matching existing pipeline convention
@@ -261,13 +249,11 @@ class ClusterSimulator:
         subsample_size: int = DEFAULT_CATCHMENT_SUBSAMPLE,
         service_b_data_dir: str = "",
         service_b_models_dir: str = "",
-    ) -> None: 
+    ) -> None:
         if n_days <= 0:
             raise ValueError(f"n_days must be > 0, got {n_days}")
         if subsample_size <= 0:
-            raise ValueError(
-                f"subsample_size must be > 0, got {subsample_size}"
-            )
+            raise ValueError(f"subsample_size must be > 0, got {subsample_size}")
 
         self._rng = rng
         self._n_days = n_days
@@ -280,10 +266,7 @@ class ClusterSimulator:
         self,
         hemisphere: Literal["north", "south"],
     ) -> KMeans:
-        model_path = (
-            Path(self._service_b_models_dir)
-            / f"kmeans_{hemisphere}_k4.joblib"
-        )
+        model_path = Path(self._service_b_models_dir) / f"kmeans_{hemisphere}_k4.joblib"
         if not model_path.exists():
             raise FileNotFoundError(
                 f"KMeans model not found at {model_path}. "
@@ -298,9 +281,7 @@ class ClusterSimulator:
         )
 
         # Validate model structure
-        assert isinstance(model, KMeans), (
-            f"Expected KMeans, got {type(model).__name__}"
-        )
+        assert isinstance(model, KMeans), f"Expected KMeans, got {type(model).__name__}"
         assert model.cluster_centers_.shape == (EXPECTED_N_CLUSTERS, 4), (
             f"Centroid shape mismatch: {model.cluster_centers_.shape}"
         )
@@ -311,10 +292,7 @@ class ClusterSimulator:
         self,
         hemisphere: Literal["north", "south"],
     ) -> np.ndarray:
-        parquet_path = (
-            Path(self._service_b_data_dir)
-            / f"{hemisphere}_final.parquet"
-        )
+        parquet_path = Path(self._service_b_data_dir) / f"{hemisphere}_final.parquet"
         if not parquet_path.exists():
             raise FileNotFoundError(
                 f"Scaled features not found at {parquet_path}. "
@@ -332,9 +310,7 @@ class ClusterSimulator:
         )
 
         assert features.ndim == 2, f"Expected 2D array, got {features.ndim}D"
-        assert features.shape[1] == 4, (
-            f"Expected 4 features, got {features.shape[1]}"
-        )
+        assert features.shape[1] == 4, f"Expected 4 features, got {features.shape[1]}"
 
         return features
 
@@ -345,13 +321,12 @@ class ClusterSimulator:
         hemisphere: Literal["north", "south"],
         daily_rainfall_mm: np.ndarray,
         consecutive_dry_days: np.ndarray,
-    ) -> dict[str, np.ndarray]:       
+    ) -> dict[str, np.ndarray]:
         n_households = water_usage_matrix.shape[0]
 
         # ── Pre-conditions ──
         assert water_usage_matrix.shape[1] == self._n_days, (
-            f"Matrix has {water_usage_matrix.shape[1]} days, "
-            f"expected {self._n_days}"
+            f"Matrix has {water_usage_matrix.shape[1]} days, expected {self._n_days}"
         )
         assert water_usage_matrix.dtype == np.float32, (
             f"Expected float32, got {water_usage_matrix.dtype}"
@@ -381,9 +356,7 @@ class ClusterSimulator:
         all_labels = predict_cluster_labels(kmeans_model, scaled_features)
         self._logger.info(
             "Cluster distribution (full pop): %s",
-            {int(k): int(v) for k, v in zip(
-                *np.unique(all_labels, return_counts=True)
-            )},
+            {int(k): int(v) for k, v in zip(*np.unique(all_labels, return_counts=True))},
         )
 
         # Step 4: Resolve archetype mapping from centroids
@@ -411,11 +384,9 @@ class ClusterSimulator:
         subsample_labels = all_labels[subsample_indices]
         self._logger.info(
             "Cluster distribution (subsample): %s",
-            {int(k): int(v) for k, v in zip(
-                *np.unique(subsample_labels, return_counts=True)
-            )},
+            {int(k): int(v) for k, v in zip(*np.unique(subsample_labels, return_counts=True))},
         )
-        
+
         # --- V2 FIX: Archetype Behavioral Scaling & Weather Reactivity ---
         # The raw demographic matrix lacks the variance required by §6.
         # We inject archetype-specific multipliers and weather-reactive logic.
@@ -433,33 +404,37 @@ class ClusterSimulator:
                 ARCHETYPE_OUTDOOR_LANDSCAPE: np.float32(0.42),
                 ARCHETYPE_CONSERVATIONISTS: np.float32(0.17),
             }
-            
+
         for cluster_id, archetype_name in archetype_mapping.items():
             mask = subsample_labels == cluster_id
             subsample_usage[mask] *= mults[archetype_name]
-            
+
         # Weather Reactivity for Outdoor/Landscape Cluster
-        outdoor_id = next(k for k, v in archetype_mapping.items() if v == ARCHETYPE_OUTDOOR_LANDSCAPE)
+        outdoor_id = next(
+            k for k, v in archetype_mapping.items() if v == ARCHETYPE_OUTDOOR_LANDSCAPE
+        )
         outdoor_mask = subsample_labels == outdoor_id
-        
+
         max_outdoor_demand = np.float32(400.0 if hemisphere == "north" else 250.0)
         cdd_factor = (np.minimum(consecutive_dry_days, 14) / 14.0).astype(np.float32)
         is_dry_today = (daily_rainfall_mm < 0.1).astype(np.float32)
         outdoor_demand_profile = (max_outdoor_demand * cdd_factor * is_dry_today).astype(np.float32)
-        
+
         subsample_usage[outdoor_mask] += outdoor_demand_profile[np.newaxis, :]
-        
+
         # Watering Ban Compliance (§7.1 Hysteresis)
         ban_condition = (consecutive_dry_days >= 10).astype(np.float32)
         outdoor_compliance = (1.0 - 0.40 * ban_condition).astype(np.float32)
         standard_compliance = (1.0 - 0.10 * ban_condition).astype(np.float32)
-        
+
         subsample_usage[outdoor_mask] *= outdoor_compliance[np.newaxis, :]
-        
-        standard_id = next(k for k, v in archetype_mapping.items() if v == ARCHETYPE_STANDARD_CONSUMERS)
+
+        standard_id = next(
+            k for k, v in archetype_mapping.items() if v == ARCHETYPE_STANDARD_CONSUMERS
+        )
         standard_mask = subsample_labels == standard_id
         subsample_usage[standard_mask] *= standard_compliance[np.newaxis, :]
-        
+
         np.maximum(subsample_usage, 0.0, out=subsample_usage)
 
         # Step 8: Compute daily cluster means
@@ -482,8 +457,6 @@ class ClusterSimulator:
                     f"(std={std_val:.8f}). This violates §0.4 — the feature "
                     f"would be functionally static and must not be included."
                 )
-            self._logger.info(
-                "Variance check PASSED: %s std=%.2f", name, std_val
-            )
+            self._logger.info("Variance check PASSED: %s std=%.2f", name, std_val)
 
         return result

@@ -1,10 +1,13 @@
 from __future__ import annotations
+
 import logging
-import numpy as np
 from typing import Literal
+
+import numpy as np
 from params import RUNOFF_PARAMS, RunoffParams
 
 logger = logging.getLogger(__name__)
+
 
 class RunoffSimulator:
     def __init__(
@@ -38,17 +41,16 @@ class RunoffSimulator:
         # When AMC = 1 (wet):  CN_eff = CN_III (minimum infiltration)
         cn_range: np.float32 = np.float32(params.cn_iii - params.cn_i)
         cn_eff: np.ndarray = (
-            np.float32(params.cn_i)
-            + antecedent_moisture_condition * cn_range
+            np.float32(params.cn_i) + antecedent_moisture_condition * cn_range
         ).astype(np.float32)
 
         # ── Step 2: SCS Retention Parameter S (mm) ──────────────────────
         # S = (25400 / CN_eff) - 254
         # S represents the maximum potential soil moisture retention.
         # Units: millimeters. S decreases as CN increases (wetter soil).
-        s_retention: np.ndarray = (
-            np.float32(25400.0) / cn_eff - np.float32(254.0)
-        ).astype(np.float32)
+        s_retention: np.ndarray = (np.float32(25400.0) / cn_eff - np.float32(254.0)).astype(
+            np.float32
+        )
 
         # ── Step 3: Initial Abstraction threshold Ia = 0.2 * S ─────────
         # Ia is the rainfall absorbed before runoff begins (depression
@@ -68,13 +70,9 @@ class RunoffSimulator:
         denominator: np.ndarray = p + np.float32(0.8) * s_retention
 
         # Safe division: only compute where denominator > 0 AND P > Ia
-        safe_mask: np.ndarray = runoff_condition & (
-            denominator > np.float32(0.0)
-        )
+        safe_mask: np.ndarray = runoff_condition & (denominator > np.float32(0.0))
         q_mm: np.ndarray = np.zeros(n, dtype=np.float32)
-        q_mm[safe_mask] = (
-            excess[safe_mask] ** 2 / denominator[safe_mask]
-        ).astype(np.float32)
+        q_mm[safe_mask] = (excess[safe_mask] ** 2 / denominator[safe_mask]).astype(np.float32)
 
         # ── Step 5: Convert depth (mm) → volume (m³) ───────────────────
         # runoff_m3 = Q_mm · A_catchment_ha · 10000 m²/ha / 1000 mm/m
@@ -82,21 +80,15 @@ class RunoffSimulator:
         # Simplification: Q(mm) * A(ha) / 1000 * 10000 = Q * A * 10
         # But spec says: runoff_m3(t) = Q(t) · A_catchment / 1000
         # where A_catchment is in m². Let's use the spec formula exactly.
-        catchment_area_m2: np.float32 = np.float32(
-            params.catchment_area_ha * 10000.0
-        )
-        runoff_m3: np.ndarray = (
-            q_mm * catchment_area_m2 / np.float32(1000.0)
-        ).astype(np.float32)
+        catchment_area_m2: np.float32 = np.float32(params.catchment_area_ha * 10000.0)
+        runoff_m3: np.ndarray = (q_mm * catchment_area_m2 / np.float32(1000.0)).astype(np.float32)
 
         # ── Rounding ────────────────────────────────────────────────────
         np.round(runoff_m3, 2, out=runoff_m3)
 
         # ── Assertions ──────────────────────────────────────────────────
         if __debug__:
-            assert runoff_m3.shape == (n,), (
-                f"D4-INV-001: runoff shape {runoff_m3.shape} != ({n},)"
-            )
+            assert runoff_m3.shape == (n,), f"D4-INV-001: runoff shape {runoff_m3.shape} != ({n},)"
             assert runoff_m3.dtype == np.float32, (
                 f"D4-INV-001: runoff dtype {runoff_m3.dtype} != float32"
             )
@@ -106,9 +98,7 @@ class RunoffSimulator:
             # Dry days must produce zero runoff
             dry_mask = daily_rainfall_mm == 0.0
             if dry_mask.any():
-                assert np.all(runoff_m3[dry_mask] == 0.0), (
-                    "D4-INV-003: non-zero runoff on dry day"
-                )
+                assert np.all(runoff_m3[dry_mask] == 0.0), "D4-INV-003: non-zero runoff on dry day"
 
         logger.info(
             "Domain 4 | %s | daily_runoff_volume_m3 generated. "
@@ -132,7 +122,7 @@ class RunoffSimulator:
         cumulative_storm_rainfall_mm: np.ndarray,
         *,
         hemisphere: Literal["north", "south"],
-    ) -> np.ndarray:        
+    ) -> np.ndarray:
         params: RunoffParams = RUNOFF_PARAMS[hemisphere]
         n: int = self._simulation_days
 
@@ -197,9 +187,9 @@ class RunoffSimulator:
             np.float32(0.0),
         ).astype(np.float32)
 
-        dd_raw: np.ndarray = np.exp(
-            -np.float32(params.depletion_lambda) * csr_prior
-        ).astype(np.float32)
+        dd_raw: np.ndarray = np.exp(-np.float32(params.depletion_lambda) * csr_prior).astype(
+            np.float32
+        )
 
         # ── Component 4: Velocity Scour Override (PHYS-05 Resolution) ───
         # When rainfall(t) > scour_rainfall_threshold_mm (50.0 mm):
@@ -212,9 +202,7 @@ class RunoffSimulator:
         # The floor of 0.40 ensures TSS remains at least 40% of the
         # first-flush adjusted base, preventing the physically impossible
         # scenario of zero suspended solids during a flood.
-        scour_mask: np.ndarray = (
-            daily_rainfall_mm > np.float32(params.scour_rainfall_threshold_mm)
-        )
+        scour_mask: np.ndarray = daily_rainfall_mm > np.float32(params.scour_rainfall_threshold_mm)
         dd_eff: np.ndarray = dd_raw.copy()
         dd_eff[scour_mask] = np.maximum(
             dd_raw[scour_mask],
@@ -224,9 +212,9 @@ class RunoffSimulator:
         # ── Assembly ────────────────────────────────────────────────────
         # TSS(t) = TSS_base(t) · FF(t) · DD_eff(t)  on wet days
         tss: np.ndarray = np.zeros(n, dtype=np.float32)
-        tss[wet_mask] = (
-            tss_base[wet_mask] * ff_factor[wet_mask] * dd_eff[wet_mask]
-        ).astype(np.float32)
+        tss[wet_mask] = (tss_base[wet_mask] * ff_factor[wet_mask] * dd_eff[wet_mask]).astype(
+            np.float32
+        )
 
         # Physical upper bound: cap at 1000 mg/L
         np.clip(tss, np.float32(0.0), np.float32(1000.0), out=tss)
@@ -236,32 +224,19 @@ class RunoffSimulator:
 
         # ── Assertions ──────────────────────────────────────────────────
         if __debug__:
-            assert tss.shape == (n,), (
-                f"D4-INV-004: TSS shape {tss.shape} != ({n},)"
-            )
-            assert tss.dtype == np.float32, (
-                f"D4-INV-004: TSS dtype {tss.dtype} != float32"
-            )
-            assert tss.min() >= 0.0, (
-                f"D4-INV-005: negative TSS: {tss.min()}"
-            )
-            assert tss.max() <= 1000.0, (
-                f"D4-INV-005: TSS exceeds 1000: {tss.max()}"
-            )
+            assert tss.shape == (n,), f"D4-INV-004: TSS shape {tss.shape} != ({n},)"
+            assert tss.dtype == np.float32, f"D4-INV-004: TSS dtype {tss.dtype} != float32"
+            assert tss.min() >= 0.0, f"D4-INV-005: negative TSS: {tss.min()}"
+            assert tss.max() <= 1000.0, f"D4-INV-005: TSS exceeds 1000: {tss.max()}"
             # Dry days must have zero TSS
             dry_days = np.where(~wet_mask)[0]
             if dry_days.size > 0:
-                assert np.all(tss[dry_days] == 0.0), (
-                    "D4-INV-006: non-zero TSS on dry day"
-                )
+                assert np.all(tss[dry_days] == 0.0), "D4-INV-006: non-zero TSS on dry day"
             # PHYS-05: Verify scour override is applied
             scour_days = np.where(scour_mask & wet_mask)[0]
             if scour_days.size > 0:
-                assert np.all(
-                    dd_eff[scour_days] >= params.scour_dd_floor
-                ), (
-                    "D4-INV-007: scour override failed — "
-                    "DD_eff below floor on heavy rain day"
+                assert np.all(dd_eff[scour_days] >= params.scour_dd_floor), (
+                    "D4-INV-007: scour override failed — DD_eff below floor on heavy rain day"
                 )
 
         logger.info(
@@ -345,15 +320,9 @@ class RunoffSimulator:
 
         # ── Assertions ──────────────────────────────────────────────────
         if __debug__:
-            assert nli.shape == (n,), (
-                f"D4-INV-008: NLI shape {nli.shape} != ({n},)"
-            )
-            assert nli.dtype == np.float32, (
-                f"D4-INV-008: NLI dtype {nli.dtype} != float32"
-            )
-            assert nli.min() >= 0.0, (
-                f"D4-INV-009: negative NLI: {nli.min()}"
-            )
+            assert nli.shape == (n,), f"D4-INV-008: NLI shape {nli.shape} != ({n},)"
+            assert nli.dtype == np.float32, f"D4-INV-008: NLI dtype {nli.dtype} != float32"
+            assert nli.min() >= 0.0, f"D4-INV-009: negative NLI: {nli.min()}"
             # Zero runoff days must produce zero NLI
             zero_runoff = daily_runoff_volume_m3 == 0.0
             if zero_runoff.any():
@@ -362,8 +331,7 @@ class RunoffSimulator:
                 )
 
         logger.info(
-            "Domain 4 | %s | nutrient_load_index generated. "
-            "mean=%.4f | max=%.4f",
+            "Domain 4 | %s | nutrient_load_index generated. mean=%.4f | max=%.4f",
             params.label,
             float(nli.mean()),
             float(nli.max()),
@@ -377,35 +345,28 @@ class RunoffSimulator:
         self,
         temp_anomaly_celsius: np.ndarray,
         nutrient_load_index: np.ndarray,
-    ) -> np.ndarray:       
+    ) -> np.ndarray:
         n: int = self._simulation_days
 
-        positive_anomaly: np.ndarray = np.maximum(
-            temp_anomaly_celsius, np.float32(0.0)
-        ).astype(np.float32)
+        positive_anomaly: np.ndarray = np.maximum(temp_anomaly_celsius, np.float32(0.0)).astype(
+            np.float32
+        )
 
-        synergy: np.ndarray = (
-            positive_anomaly * nutrient_load_index
-        ).astype(np.float32)
+        synergy: np.ndarray = (positive_anomaly * nutrient_load_index).astype(np.float32)
 
         # Rounding
         np.round(synergy, 4, out=synergy)
 
         # ── Assertions ──────────────────────────────────────────────────
         if __debug__:
-            assert synergy.shape == (n,), (
-                f"D4-INV-011: synergy shape {synergy.shape} != ({n},)"
-            )
+            assert synergy.shape == (n,), f"D4-INV-011: synergy shape {synergy.shape} != ({n},)"
             assert synergy.dtype == np.float32, (
                 f"D4-INV-011: synergy dtype {synergy.dtype} != float32"
             )
-            assert synergy.min() >= 0.0, (
-                f"D4-INV-012: negative synergy: {synergy.min()}"
-            )
+            assert synergy.min() >= 0.0, f"D4-INV-012: negative synergy: {synergy.min()}"
 
         logger.info(
-            "Domain 4 | heat_x_nutrient_synergy generated. "
-            "mean=%.4f | max=%.4f",
+            "Domain 4 | heat_x_nutrient_synergy generated. mean=%.4f | max=%.4f",
             float(synergy.mean()),
             float(synergy.max()),
         )
@@ -424,47 +385,39 @@ class RunoffSimulator:
         temp_anomaly_celsius: np.ndarray,
         *,
         hemisphere: Literal["north", "south"],
-    ) -> dict[str, np.ndarray]:       
+    ) -> dict[str, np.ndarray]:
         logger.info(
             "Domain 4 | %s | Starting full feature generation...",
             hemisphere.upper(),
         )
 
         # §5.1: Runoff volume
-        daily_runoff_volume_m3: np.ndarray = (
-            self.generate_daily_runoff_volume_m3(
-                daily_rainfall_mm=daily_rainfall_mm,
-                antecedent_moisture_condition=antecedent_moisture_condition,
-                hemisphere=hemisphere,
-            )
+        daily_runoff_volume_m3: np.ndarray = self.generate_daily_runoff_volume_m3(
+            daily_rainfall_mm=daily_rainfall_mm,
+            antecedent_moisture_condition=antecedent_moisture_condition,
+            hemisphere=hemisphere,
         )
 
         # §5.2: Total suspended solids
-        total_suspended_solids_mg_L: np.ndarray = (
-            self.generate_total_suspended_solids_mg_L(
-                daily_rainfall_mm=daily_rainfall_mm,
-                daily_runoff_volume_m3=daily_runoff_volume_m3,
-                consecutive_dry_days=consecutive_dry_days,
-                cumulative_storm_rainfall_mm=cumulative_storm_rainfall_mm,
-                hemisphere=hemisphere,
-            )
+        total_suspended_solids_mg_L: np.ndarray = self.generate_total_suspended_solids_mg_L(
+            daily_rainfall_mm=daily_rainfall_mm,
+            daily_runoff_volume_m3=daily_runoff_volume_m3,
+            consecutive_dry_days=consecutive_dry_days,
+            cumulative_storm_rainfall_mm=cumulative_storm_rainfall_mm,
+            hemisphere=hemisphere,
         )
 
         # §5.3: Nutrient load index
-        nutrient_load_index: np.ndarray = (
-            self.generate_nutrient_load_index(
-                daily_runoff_volume_m3=daily_runoff_volume_m3,
-                daily_max_temp_celsius=daily_max_temp_celsius,
-                hemisphere=hemisphere,
-            )
+        nutrient_load_index: np.ndarray = self.generate_nutrient_load_index(
+            daily_runoff_volume_m3=daily_runoff_volume_m3,
+            daily_max_temp_celsius=daily_max_temp_celsius,
+            hemisphere=hemisphere,
         )
 
         # §5.4: Heat × nutrient synergy
-        heat_x_nutrient_synergy: np.ndarray = (
-            self.generate_heat_x_nutrient_synergy(
-                temp_anomaly_celsius=temp_anomaly_celsius,
-                nutrient_load_index=nutrient_load_index,
-            )
+        heat_x_nutrient_synergy: np.ndarray = self.generate_heat_x_nutrient_synergy(
+            temp_anomaly_celsius=temp_anomaly_celsius,
+            nutrient_load_index=nutrient_load_index,
         )
 
         logger.info(

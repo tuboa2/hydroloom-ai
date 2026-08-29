@@ -1,12 +1,14 @@
-from dataclasses import dataclass
-from numpy.random import Generator
 import logging
+from dataclasses import dataclass
+
 import numpy as np
+from numpy.random import Generator
 
 __all__ = [
     "SimulationConfig",
     "GlobalInitializer",
 ]
+
 
 # 1. global initialization
 @dataclass(frozen=True)
@@ -21,17 +23,11 @@ class SimulationConfig:
 
     def __post_init__(self) -> None:
         if self.simulation_days <= 0:
-            raise ValueError(
-                f"simulation_days must be > 0. Received: {self.simulation_days}"
-            )
+            raise ValueError(f"simulation_days must be > 0. Received: {self.simulation_days}")
         if self.population_size <= 0:
-            raise ValueError(
-                f"population_size must be > 0. Received: {self.population_size}"
-            )
+            raise ValueError(f"population_size must be > 0. Received: {self.population_size}")
         if self.random_seed < 0:
-            raise ValueError(
-                f"random_seed must be a positive number. Received: {self.random_seed}"
-            )
+            raise ValueError(f"random_seed must be a positive number. Received: {self.random_seed}")
         if self.simulation_days != self.days_per_year * self.num_years:
             raise ValueError(
                 f"simulation_days ({self.simulation_days}) must equal "
@@ -43,6 +39,7 @@ class SimulationConfig:
                 f"catchment_subsample ({self.subsample}) "
                 f"cannot exceed population_size ({self.population_size})"
             )
+
 
 class GlobalInitializer:
     def __init__(self, config: SimulationConfig) -> None:

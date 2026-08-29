@@ -14,4 +14,3 @@ if __name__ == "__main__":
     result = run()
     print("Phase 2 complete.")
     print(result)
-    

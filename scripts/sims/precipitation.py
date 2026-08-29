@@ -1,15 +1,18 @@
 from __future__ import annotations
+
 import logging
-import numpy as np
 from typing import Literal
+
+import numpy as np
 from params import (
-    PRECIPITATION_PARAMS,
     AMC_PARAMS,
-    PrecipitationParams,
+    PRECIPITATION_PARAMS,
     AMCParams,
+    PrecipitationParams,
 )
 
 logger = logging.getLogger(__name__)
+
 
 class PrecipitationSimulator:
     def __init__(
@@ -31,7 +34,7 @@ class PrecipitationSimulator:
         daily_temp: np.ndarray,
         *,
         hemisphere: Literal["north", "south"],
-    ) -> dict[str, np.ndarray]:        
+    ) -> dict[str, np.ndarray]:
         params: PrecipitationParams = PRECIPITATION_PARAMS[hemisphere]
         n: int = self._simulation_days
         strat = params.stratiform
@@ -42,20 +45,12 @@ class PrecipitationSimulator:
         # ── Component A: Stratiform ────────────────────────────────
         # Sigmoid probability: higher k with positive sign = inverse
         # relationship (cooler temps → more frontal rain)
-        strat_exponent: np.ndarray = strat.sigmoid_k * (
-            temp_f32 - strat.sigmoid_midpoint
-        )
-        strat_prob: np.ndarray = np.float32(1.0) / (
-            np.float32(1.0) + np.exp(strat_exponent)
-        )
+        strat_exponent: np.ndarray = strat.sigmoid_k * (temp_f32 - strat.sigmoid_midpoint)
+        strat_prob: np.ndarray = np.float32(1.0) / (np.float32(1.0) + np.exp(strat_exponent))
 
         # Bernoulli mask: independent uniform draw
-        strat_uniform: np.ndarray = self._rng.uniform(
-            0.0, 1.0, size=n
-        ).astype(np.float32)
-        strat_wet: np.ndarray = (strat_uniform < strat_prob).astype(
-            np.uint8
-        )
+        strat_uniform: np.ndarray = self._rng.uniform(0.0, 1.0, size=n).astype(np.float32)
+        strat_wet: np.ndarray = (strat_uniform < strat_prob).astype(np.uint8)
 
         # Gamma volume: shape=α, scale=β
         strat_volume: np.ndarray = self._rng.gamma(
@@ -68,32 +63,20 @@ class PrecipitationSimulator:
         np.maximum(strat_volume, np.float32(strat.wet_floor_mm), out=strat_volume)
 
         # Masked stratiform rainfall
-        stratiform_rainfall: np.ndarray = (
-            strat_wet.astype(np.float32) * strat_volume
-        )
+        stratiform_rainfall: np.ndarray = strat_wet.astype(np.float32) * strat_volume
 
         # ── Component B: Convective ────────────────────────────────
         # Temperature gate: only activate above threshold (D3-INV-008)
-        conv_gate: np.ndarray = (
-            temp_f32 > np.float32(conv.activation_temp)
-        ).astype(np.uint8)
+        conv_gate: np.ndarray = (temp_f32 > np.float32(conv.activation_temp)).astype(np.uint8)
 
         # Sigmoid probability within activated region (negative k =
         # direct relationship: hotter → more likely)
-        conv_exponent: np.ndarray = conv.sigmoid_k * (
-            temp_f32 - conv.sigmoid_midpoint
-        )
-        conv_prob: np.ndarray = np.float32(1.0) / (
-            np.float32(1.0) + np.exp(conv_exponent)
-        )
+        conv_exponent: np.ndarray = conv.sigmoid_k * (temp_f32 - conv.sigmoid_midpoint)
+        conv_prob: np.ndarray = np.float32(1.0) / (np.float32(1.0) + np.exp(conv_exponent))
 
         # Bernoulli mask: INDEPENDENT draw (D3-INV-009)
-        conv_uniform: np.ndarray = self._rng.uniform(
-            0.0, 1.0, size=n
-        ).astype(np.float32)
-        conv_wet: np.ndarray = (conv_uniform < conv_prob).astype(
-            np.uint8
-        )
+        conv_uniform: np.ndarray = self._rng.uniform(0.0, 1.0, size=n).astype(np.float32)
+        conv_wet: np.ndarray = (conv_uniform < conv_prob).astype(np.uint8)
 
         # Apply temperature gate: force zero outside activation range
         conv_wet = conv_wet * conv_gate
@@ -109,9 +92,7 @@ class PrecipitationSimulator:
         np.maximum(conv_volume, np.float32(conv.wet_floor_mm), out=conv_volume)
 
         # Masked convective rainfall
-        convective_rainfall: np.ndarray = (
-            conv_wet.astype(np.float32) * conv_volume
-        )
+        convective_rainfall: np.ndarray = conv_wet.astype(np.float32) * conv_volume
 
         # ── Combination ───────────────────────────────────────────
         # rainfall(t) = strat(t) + conv(t), capped at 150.0 (D3-INV-001)
@@ -123,9 +104,7 @@ class PrecipitationSimulator:
         ).astype(np.float32)
 
         # Overall wet mask: any rainfall > 0
-        wet_mask: np.ndarray = (daily_rainfall_mm > np.float32(0.0)).astype(
-            np.uint8
-        )
+        wet_mask: np.ndarray = (daily_rainfall_mm > np.float32(0.0)).astype(np.uint8)
 
         # ── Rounding ──────────────────────────────────────────────
         np.round(daily_rainfall_mm, 2, out=daily_rainfall_mm)
@@ -197,21 +176,14 @@ class PrecipitationSimulator:
 
         # ── Assertions ────────────────────────────────────────────
         if __debug__:
-            assert cdd.shape == (n,), (
-                f"D3-INV-010: CDD shape {cdd.shape} != ({n},)"
-            )
-            assert cdd.min() >= 0, (
-                f"D3-INV-002: negative CDD detected: {cdd.min()}"
-            )
+            assert cdd.shape == (n,), f"D3-INV-010: CDD shape {cdd.shape} != ({n},)"
+            assert cdd.min() >= 0, f"D3-INV-002: negative CDD detected: {cdd.min()}"
             wet_days = np.where(daily_rainfall_mm > 0.0)[0]
             if wet_days.size > 0:
-                assert np.all(cdd[wet_days] == 0), (
-                    "D3-INV-003: CDD != 0 on wet days"
-                )
+                assert np.all(cdd[wet_days] == 0), "D3-INV-003: CDD != 0 on wet days"
 
         self._logger.info(
-            "Domain 3 | consecutive_dry_days generated. "
-            "max=%d | mean=%.2f",
+            "Domain 3 | consecutive_dry_days generated. max=%d | mean=%.2f",
             int(cdd.max()),
             float(cdd.mean()),
         )
@@ -246,19 +218,12 @@ class PrecipitationSimulator:
 
         # ── Assertions ────────────────────────────────────────────
         if __debug__:
-            assert rolling.shape == (n,), (
-                f"D3-INV-010: rolling_7d shape {rolling.shape} != ({n},)"
-            )
-            assert rolling.min() >= 0.0, (
-                f"D3-INV-004: negative rolling_7d: {rolling.min()}"
-            )
-            assert rolling.max() <= 150.0, (
-                f"D3-INV-004: rolling_7d exceeds 150: {rolling.max()}"
-            )
+            assert rolling.shape == (n,), f"D3-INV-010: rolling_7d shape {rolling.shape} != ({n},)"
+            assert rolling.min() >= 0.0, f"D3-INV-004: negative rolling_7d: {rolling.min()}"
+            assert rolling.max() <= 150.0, f"D3-INV-004: rolling_7d exceeds 150: {rolling.max()}"
 
         self._logger.info(
-            "Domain 3 | rolling_7d_rainfall_mm generated. "
-            "mean=%.2f | max=%.2f",
+            "Domain 3 | rolling_7d_rainfall_mm generated. mean=%.2f | max=%.2f",
             float(rolling.mean()),
             float(rolling.max()),
         )
@@ -292,21 +257,14 @@ class PrecipitationSimulator:
 
         # ── Assertions ────────────────────────────────────────────
         if __debug__:
-            assert csr.shape == (n,), (
-                f"D3-INV-010: CSR shape {csr.shape} != ({n},)"
-            )
+            assert csr.shape == (n,), f"D3-INV-010: CSR shape {csr.shape} != ({n},)"
             dry_days = np.where(daily_rainfall_mm == 0.0)[0]
             if dry_days.size > 0:
-                assert np.all(csr[dry_days] == 0.0), (
-                    "D3-INV-005: CSR != 0 on dry days"
-                )
-            assert csr.min() >= 0.0, (
-                f"CSR negative: {csr.min()}"
-            )
+                assert np.all(csr[dry_days] == 0.0), "D3-INV-005: CSR != 0 on dry days"
+            assert csr.min() >= 0.0, f"CSR negative: {csr.min()}"
 
         self._logger.info(
-            "Domain 3 | cumulative_storm_rainfall_mm generated. "
-            "max=%.2f | mean=%.2f",
+            "Domain 3 | cumulative_storm_rainfall_mm generated. max=%.2f | mean=%.2f",
             float(csr.max()),
             float(csr.mean()),
         )
@@ -343,15 +301,11 @@ class PrecipitationSimulator:
         # At t=6: R5(6) = cumsum[6] - cumsum[1] = sum(rainfall[1:6]) (correct)
         upper_indices: np.ndarray = np.arange(n, dtype=np.int32)
         lower_indices: np.ndarray = np.maximum(upper_indices - lag, 0)
-        r5: np.ndarray = (
-            cumsum[upper_indices] - cumsum[lower_indices]
-        ).astype(np.float32)
+        r5: np.ndarray = (cumsum[upper_indices] - cumsum[lower_indices]).astype(np.float32)
 
         # ── Step 2: Season-dependent midpoint ──────────────────────
         r5_mid: np.ndarray = np.empty(n, dtype=np.float32)
-        growing_mask: np.ndarray = np.isin(
-            season_label, ["spring", "summer"]
-        )
+        growing_mask: np.ndarray = np.isin(season_label, ["spring", "summer"])
         dormant_mask: np.ndarray = ~growing_mask
 
         r5_mid[growing_mask] = np.float32(amc_params.r5_mid_growing)
@@ -361,9 +315,7 @@ class PrecipitationSimulator:
         # AMC(t) = 1 / (1 + exp(-k_amc * (R5(t) - R5_mid)))
         k: np.float32 = np.float32(amc_params.k_amc)
         sigmoid_arg: np.ndarray = -k * (r5 - r5_mid)
-        amc: np.ndarray = np.float32(1.0) / (
-            np.float32(1.0) + np.exp(sigmoid_arg)
-        )
+        amc: np.ndarray = np.float32(1.0) / (np.float32(1.0) + np.exp(sigmoid_arg))
         amc = amc.astype(np.float32)
 
         # ── Safety clip (D3-INV-006) ──────────────────────────────
@@ -374,37 +326,23 @@ class PrecipitationSimulator:
 
         # ── Assertions ────────────────────────────────────────────
         if __debug__:
-            assert amc.shape == (n,), (
-                f"D3-INV-010: AMC shape {amc.shape} != ({n},)"
-            )
-            assert amc.dtype == np.float32, (
-                f"AMC dtype {amc.dtype} != float32"
-            )
-            assert amc.min() >= 0.0, (
-                f"D3-INV-006: AMC below 0: {amc.min()}"
-            )
-            assert amc.max() <= 1.0, (
-                f"D3-INV-006: AMC above 1: {amc.max()}"
-            )
+            assert amc.shape == (n,), f"D3-INV-010: AMC shape {amc.shape} != ({n},)"
+            assert amc.dtype == np.float32, f"AMC dtype {amc.dtype} != float32"
+            assert amc.min() >= 0.0, f"D3-INV-006: AMC below 0: {amc.min()}"
+            assert amc.max() <= 1.0, f"D3-INV-006: AMC above 1: {amc.max()}"
 
             # D3-INV-011: Cold start validation
-            expected_amc_0: float = 1.0 / (
-                1.0 + np.exp(k * r5_mid[0])
-            )
+            expected_amc_0: float = 1.0 / (1.0 + np.exp(k * r5_mid[0]))
             assert abs(float(amc[0]) - round(expected_amc_0, 4)) < 1e-3, (
-                f"D3-INV-011: AMC(0) = {amc[0]}, "
-                f"expected ≈ {expected_amc_0:.4f}"
+                f"D3-INV-011: AMC(0) = {amc[0]}, expected ≈ {expected_amc_0:.4f}"
             )
 
             # D3-INV-007: Verify today's rainfall is excluded
             # For t >= 1, R5(t) should NOT contain rainfall[t]
-            assert r5[0] == 0.0, (
-                f"D3-INV-007: R5(0) must be 0.0, got {r5[0]}"
-            )
+            assert r5[0] == 0.0, f"D3-INV-007: R5(0) must be 0.0, got {r5[0]}"
 
         self._logger.info(
-            "Domain 3 | %s | AMC generated. "
-            "mean=%.4f | min=%.4f | max=%.4f | R5_mean=%.2f",
+            "Domain 3 | %s | AMC generated. mean=%.4f | min=%.4f | max=%.4f | R5_mean=%.2f",
             amc_params.label,
             float(amc.mean()),
             float(amc.min()),
@@ -420,49 +358,39 @@ class PrecipitationSimulator:
         season_label: np.ndarray,
         *,
         hemisphere: Literal["north", "south"],
-    ) -> dict[str, np.ndarray]:       
+    ) -> dict[str, np.ndarray]:
         self._logger.info(
             "Domain 3 | %s | Starting full feature generation...",
             hemisphere.upper(),
         )
 
         # §4.1: Bimodal rainfall
-        rainfall_result: dict[str, np.ndarray] = (
-            self.generate_daily_rainfall_mm(
-                daily_temp=daily_temp,
-                hemisphere=hemisphere,
-            )
+        rainfall_result: dict[str, np.ndarray] = self.generate_daily_rainfall_mm(
+            daily_temp=daily_temp,
+            hemisphere=hemisphere,
         )
         daily_rainfall_mm: np.ndarray = rainfall_result["daily_rainfall_mm"]
 
         # §4.2: Consecutive dry days
-        consecutive_dry_days: np.ndarray = (
-            self.generate_consecutive_dry_days(
-                daily_rainfall_mm=daily_rainfall_mm,
-            )
+        consecutive_dry_days: np.ndarray = self.generate_consecutive_dry_days(
+            daily_rainfall_mm=daily_rainfall_mm,
         )
 
         # §4.3: Rolling 7-day rainfall
-        rolling_7d_rainfall_mm: np.ndarray = (
-            self.generate_rolling_7d_rainfall_mm(
-                daily_rainfall_mm=daily_rainfall_mm,
-            )
+        rolling_7d_rainfall_mm: np.ndarray = self.generate_rolling_7d_rainfall_mm(
+            daily_rainfall_mm=daily_rainfall_mm,
         )
 
         # §4.4: Cumulative storm rainfall
-        cumulative_storm_rainfall_mm: np.ndarray = (
-            self.generate_cumulative_storm_rainfall_mm(
-                daily_rainfall_mm=daily_rainfall_mm,
-            )
+        cumulative_storm_rainfall_mm: np.ndarray = self.generate_cumulative_storm_rainfall_mm(
+            daily_rainfall_mm=daily_rainfall_mm,
         )
 
         # §4.5: AMC (time-causal)
-        antecedent_moisture_condition: np.ndarray = (
-            self.generate_antecedent_moisture_condition(
-                daily_rainfall_mm=daily_rainfall_mm,
-                season_label=season_label,
-                hemisphere=hemisphere,
-            )
+        antecedent_moisture_condition: np.ndarray = self.generate_antecedent_moisture_condition(
+            daily_rainfall_mm=daily_rainfall_mm,
+            season_label=season_label,
+            hemisphere=hemisphere,
         )
 
         self._logger.info(

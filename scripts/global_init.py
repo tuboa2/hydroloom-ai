@@ -1,10 +1,13 @@
 # global initialization
 from __future__ import annotations
+
 import logging
+
 from config import GlobalInitializer, SimulationConfig
 
 # get the logger
 logger = logging.getLogger(__name__)
+
 
 def run(
     simulation_days: int = 1825,
@@ -27,16 +30,11 @@ def run(
     global_init = GlobalInitializer(config=config)
 
     # validate outputs
-    assert global_init.temporal_index.shape == (simulation_days,), (
-        "Temporal index shape mismatch."
-    )
+    assert global_init.temporal_index.shape == (simulation_days,), "Temporal index shape mismatch."
     assert (
-        global_init.temporal_index[0] == 0
-        and global_init.temporal_index[-1] == simulation_days - 1
+        global_init.temporal_index[0] == 0 and global_init.temporal_index[-1] == simulation_days - 1
     ), "Incorrect temporal bounds."
-    assert global_init.population_size == population_size, (
-        "Population size mismatch."
-    )
+    assert global_init.population_size == population_size, "Population size mismatch."
 
     # verify reproducibility
     test_draw_1 = global_init.rng.uniform(0, 1)
@@ -48,6 +46,7 @@ def run(
 
     logger.info("Phase 1 validation passed. Ready for the next step.")
     return global_init
+
 
 # isolation test
 if __name__ == "__main__":
