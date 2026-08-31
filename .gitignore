@@ -1,8 +1,12 @@
-venv
+venv/
+.venv/
 .agents/
 contexts/
 *.env
 data/
-__pycache__/
-hydromind.egg-info/
 figures/
+__pycache__/
+*.egg-info/
+.coverage
+.pytest_cache/
+.ruff_cache/
