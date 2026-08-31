@@ -1,112 +1,252 @@
-# 🌊 HydroLoom AI - Behavior Clusterer Service
+# 🌊 Hydroloom AI
 
-> **Next-Generation Unsupervised Learning for Environmental Behavioral Modeling**
+<div align="center">
 
-HydroLoom AI is an advanced, open-source unsupervised learning service that models and clusters household water consumption behaviors. By leveraging distinct K-Means clustering pipelines for Northern and Southern Hemispheres, HydroLoom uncovers subtle behavioral profiles driven by environmental variance, appliance efficiency, and landscape demand.
+**Continuous AI-Driven Water Quality Index Intelligence, Hydro-Climatic Simulation, and Consumer Behavioral Analytics**
+
+[![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React 19](https://img.shields.io/badge/React-19.2+-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-8.2+-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Hugging Face](https://img.shields.io/badge/Hugging%20Face-Models%20Live-FFD21E?style=for-the-badge&logo=huggingface&logoColor=black)](https://huggingface.co/tuboa2/hydroloom-ai)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+[![Tests](https://img.shields.io/badge/Tests-241%2F241%20Passed-10B981?style=for-the-badge&logo=pytest&logoColor=white)](https://docs.pytest.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
+
+</div>
 
 ---
 
-## 🏗️ Architecture
+## 📌 Executive Overview
 
-HydroLoom’s pipeline is built for reproducibility and scale, dynamically moving from stochastic data generation to high-dimensional feature engineering and clustering.
+**Hydroloom AI** is a production-grade machine learning and environmental intelligence platform designed to forecast continuous **Water Quality Index (WQI)** scores, simulate stochastic hydro-climatic rainfall washoff kinetics, and classify consumer behavioral demand profiles.
+
+Built on an asynchronous microservices architecture, Hydroloom bridges physical hydrology (SCS Curve Number runoff, Markov precipitation transitions) with ensemble gradient boosting and Level-1 Out-of-Fold (OOF) meta-learning.
+
+---
+
+## 🏗️ System Architecture
 
 ```mermaid
-graph TD
-    subgraph Phase 1: Stochastic Generation
-    A[ul_core.py] -->|Environment & Demographics| B(gen_data.py)
+flowchart TB
+    subgraph Physical_Simulation["1. Hydro-Climatic Simulation Engine"]
+        A[Markov-Chain Precipitation] --> B[SCS Curve Number Runoff]
+        B --> C[First-Flush Contaminant Washoff TSS / Nutrients]
     end
-    
-    subgraph Phase 2: Feature Engineering
-    B --> C{run_feature_engineering.py}
-    C -->|Scale & Variance Threshold| D[Processed Parquets]
+
+    subgraph Feature_Engineering["2. Dynamic Feature Engineering (Polars)"]
+        C --> D[Lagged Washoff Integrals]
+        D --> E[Thermal Shock Indices]
+        E --> F[Lead-Lag Soil Moisture & Dry-Spike Interactions]
     end
-    
-    subgraph Phase 3: Unsupervised Learning
-    D --> E[train_clusterer.py]
-    E -->|North/South KMeans | F((sandbox.py))
+
+    subgraph ML_Ensemble["3. Multi-Model Regressor & Stacking Engine"]
+        F --> G1[LightGBM Regressor]
+        F --> G2[XGBoost Regressor]
+        F --> G3[CatBoost Regressor]
+        F --> G4[Regularized Ridge/ElasticNet]
+        
+        G1 & G2 & G3 & G4 --> H[Level-1 OOF Stacking & Constrained Weighted Blending]
+        H --> I[AR-1 Autoregressive Residual Correction]
+        I --> J[SHAP TreeExplainer Waterfall]
     end
-    
-    subgraph Phase 4: QA & Inference
-    F -->|Manual / Random / Outlier| G[Cluster Assignment & Anomaly Detection]
+
+    subgraph Behavioral_Clustering["4. Unsupervised Behavioral Engine"]
+        K[Demographics & Meter Data] --> L[Feature Scaler]
+        L --> M[K-Means k=4 North / South Models]
+        M --> N[Archetype Classifier & Distance Anomaly Engine]
+    end
+
+    subgraph Production_Deployment["5. Cloud Runtime & Deployment"]
+        J & N --> O[FastAPI REST API Service]
+        P[(Hugging Face Hub: tuboa2/hydroloom-ai)] -. In-Memory Lazy Loading .-> O
+        O --> Q[Docker Runtime on Render]
+        Q <==>|JSON REST / WebSocket| R[Obsidian Dark React SPA on Vercel]
     end
 ```
 
 ---
 
-## 📊 Results & Analysis
+## 🌟 Key Features & Capabilities
 
-For a comprehensive technical report on the clustering results, consumer archetypes, and visual distributions, please refer to the full analysis document:
+### 1. Supervised Water Quality Index (WQI) Forecasting
+- **Multi-Model Regression**: Evaluates LightGBM, XGBoost, CatBoost, and Linear Baselines across Northern and Southern hemisphere climatic regimes.
+- **Level-1 Stacking & Weighted Blending**: Meta-regressors optimize out-of-fold variance, achieving $R^2 > 0.94$ with continuous confidence bounds ($\pm 1.96\sigma$).
+- **Dynamic SHAP Explanations**: Real-time TreeExplainer breakdown computes per-feature attributions (rainfall, TSS, nutrient load, temperature) for every prediction.
+- **Physical Washoff Remediation Advisories**: Generates automated operational recommendations (coagulant dosing, wetland detention routing, aerator activation) based on WQI degradation severity.
 
-📄 **[Read the Full Unsupervised Learning Analysis](ANALYSIS.md)** *(Includes executive summary, archetype profiles, and downstream impacts for predictive/prescriptive phases)*
+### 2. Physical Hydrological Simulation
+- **Markov Chain Weather Generation**: Multi-state transition matrices model wet-to-dry spells and extreme storm events across 30-day to 365-day horizons.
+- **SCS Runoff & Washoff Kinetics**: Models soil moisture antecedent conditions (AMC I/II/III) and exponential pollutant accumulation during dry periods.
+- **Continuous Multi-Layer Visualizations**: Synchronized time-series charts rendering daily precipitation pulses against WQI trajectory curves.
+
+### 3. Consumer Behavioral Demand Clustering
+- **4-Archetype K-Means Clustering ($k=4$)**:
+  - 🌿 **Conservationist**: High efficiency, low baseline consumption, stable dry-spell discipline.
+  - 🏡 **Average Household**: Balanced domestic usage with moderate seasonal variance.
+  - 🌳 **Landscape Heavy**: High outdoor irrigation demand with pronounced dry-day spikes.
+  - 🚨 **High Volume / Leaker**: Persistent tier-violation volumes and severe fixture degradation.
+- **Interactive 4D Radar Charts**: Dynamic SVG spider charts mapping Per Capita Usage, Dry Day Spikes, Appliance Efficiency Penalties, and Landscape Demand.
+
+### 4. Obsidian Glassmorphism UI Suite
+- **100% Lucide React SVG Standard**: Zero raw emojis in UI controls for an enterprise-grade finish.
+- **Ultra-Lightweight Bundle**: Stripped legacy DAG dependencies, trimming production JS down to **266 kB** (77 kB gzip).
+- **Responsive Mission Control**:
+  - 🛰️ **WQI Mission Control Studio**: Climate presets, dual-tone range sliders, and animated circular WQI gauges.
+  - 🕸️ **Behavioral Clustering Sandbox**: Real-time archetype classification and conservation rebate triggers.
+  - 📈 **Simulation Studio**: Multi-month climate scenario testing with glass KPI metrics.
+  - 🏆 **Model Benchmark Leaderboard**: Candidate regressor telemetry and causal feature stability rankings.
+  - 💬 **Community Notes Modal**: Worldwide scenario feedback feed with local persistence.
 
 ---
 
-## 🚀 The HydroLoom Sandbox
+## 📦 Hugging Face Model Repository
 
-The **HydroLoom Sandbox** (`sandbox.py`) is the core evaluation environment for this service. It provides a real-time interactive terminal to test, stress, and QA the unsupervised models. 
+All model weights, scalers, preprocessor pipelines, SHAP explainers, metrics, and documentation are hosted on the **Hugging Face Hub**:
 
-### Why the Sandbox?
-The sandbox allows researchers and contributors to inject synthetic or extreme behavioral profiles into the pre-trained models. The system evaluates the profile's distance to existing cluster centroids and actively flags anomalies (distance > 5.0) that fall outside the learned distribution.
+🔗 **Repository**: [https://huggingface.co/tuboa2/hydroloom-ai](https://huggingface.co/tuboa2/hydroloom-ai)
 
-### Sandbox Input Features
-1. **Log Per Capita Usage** - Logarithmic scaling of physiological and domestic water intake.
-2. **Dry Day Spike Factor** - Behavioral response during prolonged dry spells.
-3. **Efficiency Penalty Ratio** - The degradation multiplier based on household appliance age and maintenance.
-4. **Landscape Demand Index** - Weighted coefficient mapping property type to evaporation deficit.
+### Loading Models in Python
+```python
+from huggingface_hub import hf_hub_download
+import joblib
+
+# Download and load the North Hemisphere K-Means model
+model_path = hf_hub_download(
+    repo_id="tuboa2/hydroloom-ai",
+    repo_type="model",
+    filename="clustering_models/kmeans_north_k4.joblib"
+)
+kmeans_model = joblib.load(model_path)
+```
 
 ---
 
-## ⚡ Quickstart: Local Environment Setup
+## 🚀 Quickstart & Local Setup
 
-Follow these steps to seamlessly configure your local environment, generate the datasets, train the models, and drop straight into the sandbox.
+### Prerequisites
+- Python 3.12+
+- Node.js 20+ & `pnpm`
+- Git
 
+### 1. Clone the Repository
 ```bash
-# 1. Clone the repository and enter the directory
 git clone https://github.com/tuboa2/hydroloom-ai.git
 cd hydroloom-ai
+```
 
-# 2. Initialize a secure Python virtual environment
+### 2. Backend Setup
+```bash
+# Create and activate virtual environment
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
-# 3. Install core dependencies
+# Install Python dependencies
 pip install -r requirements.txt
 
-# 4. Launch the interactive AI Sandbox
-python sandbox.py
+# Start the FastAPI development server
+uvicorn services.wqi_predictor.deployment.api:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### 3. Frontend Setup
+```bash
+cd app
+pnpm install
+pnpm run dev
+```
+Open [http://localhost:5173](http://localhost:5173) in your browser.
+
+---
+
+## 🐳 Docker Deployment
+
+The backend includes a hardened, multi-stage Dockerfile configured for non-root execution (`appuser:appgroup`, UID `10001`) and dynamic port binding:
+
+```bash
+# Build the Docker image
+docker build -t hydroloom-api:latest .
+
+# Run the container
+docker run -p 8000:8000 -e PORT=8000 hydroloom-api:latest
+```
+
+*Memory Footprint: **~155 MB RSS** (Optimized for Render Free Tier 512 MB ceiling).*
+
+---
+
+## 📡 REST API Reference
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/health` | Service liveness, RSS memory telemetry, loaded models |
+| `GET` | `/ping` | Lightweight zero-latency heartbeat |
+| `POST` | `/api/v1/predict/wqi` | Predict WQI score with confidence interval and SHAP decomposition |
+| `POST` | `/api/v1/cluster/predict` | Classify consumer behavior archetype and distance anomaly score |
+| `POST` | `/api/v1/simulate` | Run multi-horizon stochastic rainfall and washoff simulation (30d–365d) |
+| `GET` | `/api/v1/models/metadata` | Retrieve candidate regressor benchmark rankings and feature importances |
+| `POST` | `/api/v1/feedback` | Submit validation feedback note with star rating |
+| `GET` | `/api/v1/feedback` | List community feedback stream |
+
+### Example: WQI Prediction Request
+```bash
+curl -X POST "http://localhost:8000/api/v1/predict/wqi" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "hemisphere": "north",
+       "daily_rainfall_mm": 45.0,
+       "daily_max_temp": 28.5,
+       "antecedent_moisture_condition": 3,
+       "total_suspended_solids_mg_l": 120.0,
+       "nutrient_load_index": 72.0,
+       "consecutive_dry_days": 14,
+       "consumer_demand_cluster": 2,
+       "model_family": "stacking_ensemble"
+     }'
 ```
 
 ---
 
-## 📓 Notebooks & Google Colab
+## 🧪 Test Suite & Quality Assurance
 
-The `notebooks/` directory contains in-depth Jupyter notebooks for exploratory data analysis (EDA), univariate/multivariate analysis, and cluster exploration. 
+Hydroloom maintains a strict multi-tier automated test harness covering unit tests, physical simulations, deployment configurations, and headless browser interactions:
 
-> [!NOTE]
-> **Google Colab Runtime**
-> The Jupyter notebooks in this repository are explicitly designed and optimized to be run using the **Google Colab Server** as the primary runtime. When exploring or executing the notebooks, please ensure you are connected to a Colab backend for seamless execution and dependency management.
+```bash
+# Run all 241 automated tests
+pytest tests/
+```
+
+```text
+============================= test session starts ==============================
+collected 241 items
+
+tests/e2e/test_frontend_e2e.py .                                         [  0%]
+tests/sims/cluster.py ........................................           [ 17%]
+tests/sims/interactions.py ...                                           [ 18%]
+tests/sims/macro_behavior.py ...                                         [ 19%]
+tests/sims/precipitation.py ...........................................  [ 37%]
+tests/sims/runoff.py ...........................                         [ 48%]
+tests/sims/wqi.py ..                                                     [ 49%]
+tests/unit/ensemble.py ..................................                [ 63%]
+tests/unit/feature_engineer.py ..........                                [ 67%]
+tests/unit/model.py .....                                                [ 69%]
+tests/unit/preprocess.py ..........                                      [ 73%]
+tests/unit/selection.py ...............                                  [ 80%]
+tests/unit/test_api.py .......                                           [ 82%]
+tests/unit/test_api_comprehensive.py ................................    [ 96%]
+tests/unit/test_deployment_config.py .....                               [ 98%]
+tests/unit/test_hf_loader.py ....                                        [100%]
+
+================= 241 passed, 14 warnings in 128.19s (0:02:08) =================
+```
 
 ---
 
-## 🤖 Agentic Integrations & Workflows
+## 📄 License & Contributing
 
-HydroLoom is natively designed to integrate with modern AI orchestration and execution environments.
-
-> [!TIP]
-> **BlockRun Integration**
-> Use BlockRun to programmatically execute `sandbox.py` in isolated ephemeral containers. BlockRun can pipe programmatic inputs (Option 3: "Extreme Outlier Profile") in a loop to rapidly stress-test the bounds of the clustering logic without manual intervention.
-
-> [!TIP]
-> **Google Antigravity Workflows**
-> Deploy Antigravity subagents to conduct parallel QA runs on the Sandbox. Subagents can parse the distance metrics outputted by the terminal, cross-reference them against expected thresholds, and automatically document newly discovered edge cases or "failure modes" into the repository.
-
----
-
-## 🤝 Open Source Contribution Guidelines
-
-Please read the [CONTRIBUTION.md](CONTRIBUTION.md) for details on my code of conduct, and the process for discovering anomalies, filing issues, and submitting pull requests to the project.
----
+- **Documentation**: Detailed guides are available in [`docs/architecture.md`](docs/architecture.md), [`docs/methodology.md`](docs/methodology.md), and [`docs/evaluation.md`](docs/evaluation.md).
+- **Contributing**: Please review [`CONTRIBUTION.md`](CONTRIBUTION.md) for contribution guidelines and code of conduct.
+- **License**: Released under the [MIT License](LICENSE).
 
 <div align="center">
-  <i>Designed for the future of environmental AI.</i>
+  <sub>Designed for the future of environmental AI and resilient hydrological intelligence.</sub>
 </div>
