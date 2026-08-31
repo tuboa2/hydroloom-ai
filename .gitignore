@@ -10,3 +10,9 @@ __pycache__/
 .coverage
 .pytest_cache/
 .ruff_cache/
+artifacts/
+mlruns/
+wandb/
+catboost_info/
+logs/
+analysis-results/
