@@ -1,0 +1,97 @@
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #06b6d4;
+  --color-primary-foreground: #ffffff;
+  --color-background: #030712;
+  --color-surface: #0b0f19;
+  --color-surface-hover: #111827;
+  --color-foreground: #f8fafc;
+  --color-card: #0d1322;
+  --color-card-border: #1e293b;
+  --color-border: #1e293b;
+  --color-muted: #64748b;
+  --color-muted-foreground: #94a3b8;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: #030712;
+  color: #f1f5f9;
+  margin: 0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, .font-heading {
+  font-family: 'Outfit', 'Inter', system-ui, sans-serif;
+}
+
+code, pre, .font-mono {
+  font-family: 'Fira Code', ui-monospace, monospace;
+}
+
+/* Glassmorphism panel helper */
+.glass-panel {
+  background: rgba(13, 19, 34, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-panel-glow {
+  background: rgba(13, 19, 34, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(6, 182, 212, 0.25);
+  box-shadow: 0 0 25px -5px rgba(6, 182, 212, 0.15);
+}
+
+/* Custom Webkit Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #030712;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Range input styling */
+input[type=range] {
+  -webkit-appearance: none;
+  background: #1e293b;
+  border-radius: 9999px;
+  height: 6px;
+}
+
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 18px;
+  width: 18px;
+  border-radius: 50%;
+  background: #06b6d4;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.6);
+  border: 2px solid #ffffff;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+input[type=range]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  background: #38bdf8;
+}

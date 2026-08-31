@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: hydroloom-api
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: HF_REPO_ID
+        value: tuboa2/hydroloom-ai
+      - key: HF_TOKEN
+        sync: false
